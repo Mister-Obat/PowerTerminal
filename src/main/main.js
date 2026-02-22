@@ -69,14 +69,6 @@ function createWindow() {
     mainWindow.show();
   });
 
-  // Intercepte Ctrl+C avant le DOM : copie si sélection, SIGINT sinon
-  mainWindow.webContents.on('before-input-event', (event, input) => {
-    if (input.type === 'keyDown' && input.control && !input.alt && input.key === 'c') {
-      event.preventDefault();
-      mainWindow.webContents.send('terminal:ctrl-c');
-    }
-  });
-
   // Ensure all terminals are killed when window is destroyed
   mainWindow.on('closed', () => {
     killAllTerminals();

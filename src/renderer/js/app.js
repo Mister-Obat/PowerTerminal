@@ -351,6 +351,26 @@ async function addTerminal(cwd) {
     state.terminals.push({ id, ptyId, xterm: term, fitAddon, container, projectId: state.activeProjectId });
 
     term.onData(data => window.api.sendInput(ptyId, data));
+
+    term.attachCustomKeyEventHandler((e) => {
+        if (e.type === 'keydown' && e.ctrlKey && !e.altKey && e.key === 'c') {
+            const focused = document.activeElement;
+            const isEditableField = focused && (
+                focused.tagName === 'INPUT' ||
+                focused.tagName === 'TEXTAREA' ||
+                focused.isContentEditable
+            );
+            if (isEditableField) return true; // laisser le comportement natif
+            const selection = term.getSelection();
+            if (selection) {
+                window.api.copyToClipboard(selection);
+                term.clearSelection();
+                return false; // consommé, ne pas envoyer \u0003
+            }
+            return true; // pas de sélection → laisser xterm envoyer \u0003 via onData
+        }
+        return true;
+    });
     switchTerminal(id);
     renderTabs();
 
@@ -802,34 +822,6 @@ async function init() {
             t.fitAddon.fit();
             window.api.resizeTerminal(t.ptyId, t.xterm.cols, t.xterm.rows);
         });
-    });
-
-    // Ctrl+C intercepté depuis le main process (before-input-event)
-    window.api.onCtrlC(() => {
-        // Si le focus est sur un champ de texte éditable, laisser le comportement natif (copie)
-        const focused = document.activeElement;
-        const isEditableField = focused && (
-            focused.tagName === 'INPUT' ||
-            focused.tagName === 'TEXTAREA' ||
-            focused.isContentEditable
-        );
-        if (isEditableField) {
-            const selection = window.getSelection()?.toString() || focused.value?.substring(focused.selectionStart, focused.selectionEnd) || '';
-            if (selection) {
-                window.api.copyToClipboard(selection);
-            }
-            return;
-        }
-
-        const active = state.terminals.find(t => t.id === state.activeTerminalId);
-        if (!active) return;
-        const selection = active.xterm.getSelection();
-        if (selection) {
-            window.api.copyToClipboard(selection);
-            active.xterm.clearSelection();
-        } else {
-            window.api.sendInput(active.ptyId, '\u0003');
-        }
     });
 
     const config = await window.api.getConfig();

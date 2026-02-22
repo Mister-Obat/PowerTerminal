@@ -26,9 +26,6 @@ contextBridge.exposeInMainWorld('api', {
   // Clipboard (délégué au main process)
   copyToClipboard: (text) => ipcRenderer.send('clipboard:write', text),
 
-  // Ctrl+C intercept
-  onCtrlC: (callback) => ipcRenderer.on('terminal:ctrl-c', () => callback()),
-
   // Open URL in default browser
   openUrl: (url) => ipcRenderer.send('shell:open-url', url),
 });
