@@ -352,6 +352,13 @@ async function addTerminal(cwd) {
 
     term.onData(data => window.api.sendInput(ptyId, data));
 
+    // Cache la sélection via onSelectionChange car attachCustomKeyEventHandler
+    // peut recevoir l'événement après qu'xterm a déjà effacé la sélection
+    let lastSelection = '';
+    term.onSelectionChange(() => {
+        lastSelection = term.getSelection();
+    });
+
     term.attachCustomKeyEventHandler((e) => {
         if (e.type === 'keydown' && e.ctrlKey && !e.altKey && e.key === 'c') {
             const focused = document.activeElement;
@@ -360,14 +367,14 @@ async function addTerminal(cwd) {
                 focused.tagName === 'TEXTAREA' ||
                 focused.isContentEditable
             );
-            if (isEditableField) return true; // laisser le comportement natif
-            const selection = term.getSelection();
-            if (selection) {
-                window.api.copyToClipboard(selection);
+            if (isEditableField) return true;
+            if (lastSelection) {
+                window.api.copyToClipboard(lastSelection);
+                lastSelection = '';
                 term.clearSelection();
-                return false; // consommé, ne pas envoyer \u0003
+                return false; // copié, ne pas envoyer \u0003
             }
-            return true; // pas de sélection → laisser xterm envoyer \u0003 via onData
+            return true; // pas de sélection → xterm envoie \u0003 via onData
         }
         return true;
     });
