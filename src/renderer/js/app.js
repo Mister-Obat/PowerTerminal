@@ -352,32 +352,16 @@ async function addTerminal(cwd) {
 
     term.onData(data => window.api.sendInput(ptyId, data));
 
-    // Cache la sélection — on ne l'efface que manuellement (pas sur onSelectionChange vide)
-    // car xterm peut effacer la sélection avant que attachCustomKeyEventHandler soit appelé
-    let lastSelection = '';
-    term.onSelectionChange(() => {
-        const sel = term.getSelection();
-        if (sel) lastSelection = sel;
-    });
-
+    // Ctrl+C → SIGINT (natif xterm, aucune interception)
+    // Ctrl+Shift+C → copier la sélection
     term.attachCustomKeyEventHandler((e) => {
-        if (e.type === 'keydown' && e.ctrlKey && !e.altKey && e.key === 'c') {
-            const focused = document.activeElement;
-            const isEditableField = focused && (
-                focused.tagName === 'INPUT' ||
-                focused.tagName === 'TEXTAREA' ||
-                focused.isContentEditable
-            );
-            if (isEditableField) return true;
-            // Tenter getSelection() d'abord, fallback sur le cache
-            const selection = term.getSelection() || lastSelection;
+        if (e.type === 'keydown' && e.ctrlKey && e.shiftKey && e.key === 'C') {
+            const selection = term.getSelection();
             if (selection) {
                 window.api.copyToClipboard(selection);
-                lastSelection = '';
                 term.clearSelection();
-                return false; // copié, ne pas envoyer \u0003
             }
-            return true; // pas de sélection → xterm envoie \u0003 via onData
+            return false;
         }
         return true;
     });
