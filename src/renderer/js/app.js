@@ -352,19 +352,18 @@ async function addTerminal(cwd) {
 
     term.onData(data => window.api.sendInput(ptyId, data));
 
-    // Ctrl+C → SIGINT (natif xterm, aucune interception)
-    // Ctrl+Shift+C → copier la sélection
-    term.attachCustomKeyEventHandler((e) => {
-        if (e.type === 'keydown' && e.ctrlKey && e.shiftKey && e.key === 'C') {
+    // Ctrl+C : copie si sélection (avant qu'xterm l'efface) ET envoie SIGINT
+    // Interception via capture sur le conteneur pour lire la sélection avant xterm
+    container.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === 'c') {
             const selection = term.getSelection();
             if (selection) {
                 window.api.copyToClipboard(selection);
                 term.clearSelection();
             }
-            return false;
+            // On ne preventDefault pas : xterm envoie \u0003 dans tous les cas
         }
-        return true;
-    });
+    }, { capture: true });
     switchTerminal(id);
     renderTabs();
 
