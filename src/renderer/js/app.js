@@ -59,6 +59,11 @@ const dom = {
     deleteCancelBtn: document.getElementById('delete-cancel'),
 };
 
+function focusActiveTerminal() {
+    const active = state.terminals.find(t => t.id === state.activeTerminalId);
+    if (active) active.xterm.focus();
+}
+
 /**
  * Confirm before exit
  */
@@ -278,6 +283,7 @@ function saveCustomCommand() {
     state.metadata[state.activeProjectId] = meta;
     saveMetadata();
     dom.cmdModal.classList.add('hidden');
+    focusActiveTerminal();
     renderCommands(state.activeProjectRoot);
 }
 
@@ -307,6 +313,7 @@ function confirmDeleteCommand(index) {
 
 function deleteCommand() {
     dom.deleteModal.classList.add('hidden');
+    focusActiveTerminal();
     if (state.deleteCallback) {
         state.deleteCallback();
         state.deleteCallback = null;
@@ -669,7 +676,7 @@ async function init() {
 
     // Modals
     dom.modalLogoPicker.onclick = pickLogoForModal;
-    dom.modalCancel.onclick = () => dom.editModal.classList.add('hidden');
+    dom.modalCancel.onclick = () => { dom.editModal.classList.add('hidden'); focusActiveTerminal(); };
     dom.modalSave.onclick = async () => {
         const p = state.editingProject;
         if (!state.metadata[p.path]) state.metadata[p.path] = {};
@@ -677,13 +684,14 @@ async function init() {
         state.metadata[p.path].customRoot = dom.modalRoot.value;
         await saveMetadata();
         dom.editModal.classList.add('hidden');
+        focusActiveTerminal();
         await loadProjects();
     };
 
-    dom.cmdCancel.onclick = () => dom.cmdModal.classList.add('hidden');
+    dom.cmdCancel.onclick = () => { dom.cmdModal.classList.add('hidden'); focusActiveTerminal(); };
     dom.cmdSave.onclick = saveCustomCommand;
 
-    dom.deleteCancelBtn.onclick = () => dom.deleteModal.classList.add('hidden');
+    dom.deleteCancelBtn.onclick = () => { dom.deleteModal.classList.add('hidden'); focusActiveTerminal(); };
     dom.deleteConfirmBtn.onclick = deleteCommand;
 
     // Entrée = valider dans les fenêtres d'édition
