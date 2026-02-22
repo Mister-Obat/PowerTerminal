@@ -13,6 +13,7 @@ const state = {
     rootPath: null,
     editingProject: null,
     editingCommandIndex: null,
+    deleteCallback: null,
     recentlyOpened: [] // Array of project paths opened in current session (non-favorites only)
 };
 
@@ -222,12 +223,17 @@ function createProjectItem(p) {
 }
 
 async function removeProject(p) {
-    if (!confirm(`Retirer "${p.displayName}" de la liste ?\n(Les commandes enregistrées seront conservées dans le fichier config.)`)) return;
-    if (state.metadata[p.path]) {
-        state.metadata[p.path]._removed = true;
-    }
-    await saveMetadata();
-    await loadProjects();
+    showConfirmModal(
+        `Retirer le projet ?`,
+        `Retirer "${p.displayName}" de la liste ? (Les commandes enregistrées seront conservées dans le fichier config.)`,
+        async () => {
+            if (state.metadata[p.path]) {
+                state.metadata[p.path]._removed = true;
+            }
+            await saveMetadata();
+            await loadProjects();
+        }
+    );
 }
 
 /**
@@ -275,23 +281,36 @@ function saveCustomCommand() {
     renderCommands(state.activeProjectRoot);
 }
 
-function confirmDeleteCommand(index) {
-    state.editingCommandIndex = index;
+function showConfirmModal(title, message, callback) {
+    document.getElementById('delete-confirm-title').textContent = title;
+    document.getElementById('delete-confirm-message').textContent = message;
+    state.deleteCallback = callback;
     dom.deleteModal.classList.remove('hidden');
 }
 
+function confirmDeleteCommand(index) {
+    state.editingCommandIndex = index;
+    showConfirmModal(
+        'Supprimer la commande ?',
+        'Cette action est irréversible. Voulez-vous vraiment supprimer cette commande ?',
+        () => {
+            const meta = state.metadata[state.activeProjectId];
+            if (meta && meta.customCommands) {
+                meta.customCommands.splice(state.editingCommandIndex, 1);
+                saveMetadata();
+                renderCommands(state.activeProjectRoot);
+            }
+            state.editingCommandIndex = null;
+        }
+    );
+}
+
 function deleteCommand() {
-    if (state.editingCommandIndex === null) return;
-    
-    const meta = state.metadata[state.activeProjectId];
-    if (meta && meta.customCommands) {
-        meta.customCommands.splice(state.editingCommandIndex, 1);
-        saveMetadata();
-        renderCommands(state.activeProjectRoot);
-    }
-    
     dom.deleteModal.classList.add('hidden');
-    state.editingCommandIndex = null;
+    if (state.deleteCallback) {
+        state.deleteCallback();
+        state.deleteCallback = null;
+    }
 }
 
 function launchCommand(command) {
@@ -667,6 +686,21 @@ async function init() {
     dom.deleteCancelBtn.onclick = () => dom.deleteModal.classList.add('hidden');
     dom.deleteConfirmBtn.onclick = deleteCommand;
 
+    // Entrée = valider dans les fenêtres d'édition
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        if (!dom.editModal.classList.contains('hidden')) {
+            e.preventDefault();
+            dom.modalSave.click();
+        } else if (!dom.cmdModal.classList.contains('hidden')) {
+            e.preventDefault();
+            dom.cmdSave.click();
+        } else if (!dom.deleteModal.classList.contains('hidden')) {
+            e.preventDefault();
+            dom.deleteConfirmBtn.click();
+        }
+    });
+
     // Panel resizers
     const resizer = document.getElementById('panel-resizer');
     const resizerH = document.getElementById('panel-resizer-h');
@@ -765,6 +799,21 @@ async function init() {
 
     // Ctrl+C intercepté depuis le main process (before-input-event)
     window.api.onCtrlC(() => {
+        // Si le focus est sur un champ de texte éditable, laisser le comportement natif (copie)
+        const focused = document.activeElement;
+        const isEditableField = focused && (
+            focused.tagName === 'INPUT' ||
+            focused.tagName === 'TEXTAREA' ||
+            focused.isContentEditable
+        );
+        if (isEditableField) {
+            const selection = window.getSelection()?.toString() || focused.value?.substring(focused.selectionStart, focused.selectionEnd) || '';
+            if (selection) {
+                window.api.copyToClipboard(selection);
+            }
+            return;
+        }
+
         const active = state.terminals.find(t => t.id === state.activeTerminalId);
         if (!active) return;
         const selection = active.xterm.getSelection();
