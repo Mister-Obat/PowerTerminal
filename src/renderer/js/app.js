@@ -373,14 +373,26 @@ async function addTerminal(cwd) {
     // Ctrl+C : copie si sélection (avant qu'xterm l'efface) ET envoie SIGINT
     // Interception via capture sur le conteneur pour lire la sélection avant xterm
     container.addEventListener('keydown', (e) => {
-        if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === 'c') {
-            const selection = term.getSelection();
+        const isC = (e.key || '').toLowerCase() === 'c';
+        if (!isC || !e.ctrlKey || e.altKey) return;
+
+        const selection = term.getSelection();
+        if (e.shiftKey) {
             if (selection) {
                 window.api.copyToClipboard(selection);
                 term.clearSelection();
             }
-            // On ne preventDefault pas : xterm envoie \u0003 dans tous les cas
+            // Ctrl+Shift+C doit copier seulement (pas de SIGINT)
+            e.preventDefault();
+            e.stopPropagation();
+            return;
         }
+
+        if (selection) {
+            window.api.copyToClipboard(selection);
+            term.clearSelection();
+        }
+        // On ne preventDefault pas : xterm envoie \u0003 dans tous les cas
     }, { capture: true });
     switchTerminal(id);
     renderTabs();
@@ -415,7 +427,8 @@ function renderTabs() {
     const projectTerminals = state.terminals.filter(t => t.projectId === state.activeProjectId);
     projectTerminals.forEach((t, i) => {
         const tab = document.createElement('div');
-        tab.className = `tab ${t.id === state.activeTerminalId ? 'active' : ''}`;
+        const isActive = t.id === state.activeTerminalId;
+        tab.className = `tab ${isActive ? 'active' : ''} ${t.isRunning ? 'running' : ''}`.trim();
         tab.textContent = `Shell ${i + 1}`;
         tab.onclick = () => switchTerminal(t.id);
         dom.tabsContainer.appendChild(tab);
@@ -837,6 +850,7 @@ window.api.onTerminalStatus(({ ptyId, running }) => {
     if (term.isRunning === !!running) return;
     term.isRunning = !!running;
     renderSidebarFavorites();
+    renderTabs();
 });
 
 window.api.onTerminalExit(({ ptyId }) => {
