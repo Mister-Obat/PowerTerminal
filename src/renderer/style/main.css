@@ -86,6 +86,9 @@ html, body {
     height: 100%;
     display: flex;
     align-items: center;
+    -webkit-app-region: drag;
+    user-select: none;
+    -webkit-user-select: none;
     padding-left: 1rem;
     cursor: default;
     font-size: 0.7rem;

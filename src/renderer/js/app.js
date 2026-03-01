@@ -672,24 +672,6 @@ async function init() {
     document.getElementById('win-max').onclick = () => window.api.windowControl('maximize');
     document.getElementById('win-close').onclick = () => window.api.windowControl('close');
 
-    {
-        const dragHandle = document.querySelector('.drag-handle');
-        let dragging = false, startX, startY, winStartX, winStartY;
-        dragHandle.addEventListener('mousedown', (e) => {
-            if (e.button !== 0) return;
-            dragging = true;
-            startX = e.screenX;
-            startY = e.screenY;
-            winStartX = window.screenX;
-            winStartY = window.screenY;
-        });
-        window.addEventListener('mousemove', (e) => {
-            if (!dragging) return;
-            window.api.moveWindow(winStartX + e.screenX - startX, winStartY + e.screenY - startY);
-        });
-        window.addEventListener('mouseup', () => { dragging = false; });
-    }
-
     initEmojiPicker();
 
     dom.cmdEmoji.onclick = (e) => {
