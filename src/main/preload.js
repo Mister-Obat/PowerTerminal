@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld('api', {
   createTerminal: (cwd) => ipcRenderer.invoke('terminal:create', { cwd }),
   sendInput: (ptyId, data) => ipcRenderer.send('terminal:input', { ptyId, data }),
   onTerminalData: (callback) => ipcRenderer.on('terminal:incoming', (event, data) => callback(data)),
+  onTerminalStatus: (callback) => ipcRenderer.on('terminal:status', (event, data) => callback(data)),
+  onTerminalExit: (callback) => ipcRenderer.on('terminal:exit', (event, data) => callback(data)),
   resizeTerminal: (ptyId, cols, rows) => ipcRenderer.send('terminal:resize', { ptyId, cols, rows }),
   destroyTerminal: (ptyId) => ipcRenderer.send('terminal:destroy', { ptyId }),
 

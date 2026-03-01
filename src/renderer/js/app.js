@@ -64,6 +64,10 @@ function focusActiveTerminal() {
     if (active) active.xterm.focus();
 }
 
+function isProjectRunning(projectId) {
+    return state.terminals.some(t => t.projectId === projectId && t.isRunning);
+}
+
 /**
  * Confirm before exit
  */
@@ -320,8 +324,21 @@ function deleteCommand() {
     }
 }
 
-function launchCommand(command) {
-    const active = state.terminals.find(t => t.id === state.activeTerminalId);
+async function launchCommand(command) {
+    let active = state.terminals.find(t => t.id === state.activeTerminalId);
+
+    if (!active) {
+        const projectTerminals = state.terminals.filter(t => t.projectId === state.activeProjectId);
+        if (projectTerminals.length > 0) {
+            const fallback = projectTerminals[projectTerminals.length - 1];
+            switchTerminal(fallback.id);
+            active = fallback;
+        } else if (state.activeProjectRoot) {
+            await addTerminal(state.activeProjectRoot);
+            active = state.terminals.find(t => t.id === state.activeTerminalId);
+        }
+    }
+
     if (active) {
         window.api.sendInput(active.ptyId, `${command}\r`);
     }
@@ -348,7 +365,8 @@ async function addTerminal(cwd) {
     term.open(container);
     
     const ptyId = await window.api.createTerminal(cwd);
-    state.terminals.push({ id, ptyId, xterm: term, fitAddon, container, projectId: state.activeProjectId });
+    state.terminals.push({ id, ptyId, xterm: term, fitAddon, container, projectId: state.activeProjectId, isRunning: false });
+    renderSidebarFavorites();
 
     term.onData(data => window.api.sendInput(ptyId, data));
 
@@ -411,6 +429,7 @@ function cleanupTerminals() {
         t.container.remove();
     });
     state.terminals = [];
+    renderSidebarFavorites();
 }
 
 function removeActiveTerminal() {
@@ -426,6 +445,7 @@ function removeActiveTerminal() {
     
     // Remove from state
     state.terminals.splice(index, 1);
+    renderSidebarFavorites();
     
     // Switch to another terminal
     const nextTerminal = state.terminals[index] || state.terminals[index - 1];
@@ -586,7 +606,9 @@ function renderSidebarFavorites() {
     const allToShow = [...favs, ...recentProjects];
     allToShow.forEach(p => {
         const item = document.createElement('div');
-        item.className = 'sidebar-fav-item' + (p.path === state.activeProjectId ? ' active' : '');
+        item.className = 'sidebar-fav-item'
+            + (p.path === state.activeProjectId ? ' active' : '')
+            + (isProjectRunning(p.path) ? ' running' : '');
         item.title = p.displayName;
         if (p.logoPath) {
             const img = document.createElement('img');
@@ -825,6 +847,36 @@ async function init() {
 window.api.onTerminalData(({ ptyId, data }) => {
     const term = state.terminals.find(t => t.ptyId === ptyId);
     if (term) term.xterm.write(data);
+});
+
+window.api.onTerminalStatus(({ ptyId, running }) => {
+    const term = state.terminals.find(t => t.ptyId === ptyId);
+    if (!term) return;
+    if (term.isRunning === !!running) return;
+    term.isRunning = !!running;
+    renderSidebarFavorites();
+});
+
+window.api.onTerminalExit(({ ptyId }) => {
+    const index = state.terminals.findIndex(t => t.ptyId === ptyId);
+    if (index === -1) return;
+
+    const term = state.terminals[index];
+    term.xterm.dispose();
+    term.container.remove();
+    state.terminals.splice(index, 1);
+
+    const activeProjectTerminals = state.terminals.filter(t => t.projectId === state.activeProjectId);
+    if (!activeProjectTerminals.length) {
+        state.activeTerminalId = null;
+        renderTabs();
+    } else if (!state.terminals.some(t => t.id === state.activeTerminalId)) {
+        switchTerminal(activeProjectTerminals[activeProjectTerminals.length - 1].id);
+    } else {
+        renderTabs();
+    }
+
+    renderSidebarFavorites();
 });
 
 document.addEventListener('DOMContentLoaded', init);

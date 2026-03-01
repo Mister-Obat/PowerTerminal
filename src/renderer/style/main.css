@@ -539,6 +539,19 @@ html, body {
 }
 .sidebar-fav-item:hover { border-color: var(--primary); transform: scale(1.08); }
 .sidebar-fav-item.active { border: 2px solid var(--accent); box-shadow: 0 0 8px rgba(16, 185, 129, 0.5); }
+.sidebar-fav-item.running::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #111214;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.9);
+    pointer-events: none;
+}
 
 .sidebar-footer {
     margin-top: auto;

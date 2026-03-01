@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import fs from 'fs/promises';
 import os from 'os';
+import { execFile } from 'child_process';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -17,6 +18,9 @@ protocol.registerSchemesAsPrivileged([
 Menu.setApplicationMenu(null);
 
 const terminals = new Map();
+const terminalRunningStates = new Map();
+let terminalStatusInterval = null;
+const TERMINAL_STATUS_INTERVAL_MS = 1200;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -45,6 +49,108 @@ async function writeConfig(data) {
 app.setAppUserModelId('obat.powerterminal.v1');
 
 let mainWindow;
+
+function sendTerminalStatus(ptyId, running) {
+  if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.webContents || mainWindow.webContents.isDestroyed()) {
+    return;
+  }
+  mainWindow.webContents.send('terminal:status', { ptyId, running });
+}
+
+function setTerminalRunning(ptyId, running) {
+  const previous = terminalRunningStates.get(ptyId);
+  if (previous === running) return;
+  terminalRunningStates.set(ptyId, running);
+  sendTerminalStatus(ptyId, running);
+}
+
+function stopTerminalStatusMonitorIfIdle() {
+  if (terminals.size > 0 || !terminalStatusInterval) return;
+  clearInterval(terminalStatusInterval);
+  terminalStatusInterval = null;
+}
+
+async function getChildProcessesByParent(parentPids) {
+  if (!parentPids.length) return new Map();
+
+  const childrenByParent = new Map(parentPids.map(pid => [pid, []]));
+
+  try {
+    if (process.platform === 'win32') {
+      const pidList = parentPids.join(',');
+      const script = `$parents = @(${pidList}); Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -in $parents } | Select-Object ParentProcessId, ProcessId, Name | ConvertTo-Json -Compress`;
+      const stdout = await new Promise((resolve, reject) => {
+        execFile('powershell.exe', ['-NoProfile', '-Command', script], { windowsHide: true, timeout: 1500, maxBuffer: 1024 * 1024 }, (error, out) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve(out);
+        });
+      });
+
+      const trimmed = String(stdout || '').trim();
+      if (!trimmed) return childrenByParent;
+
+      const parsed = JSON.parse(trimmed);
+      const entries = Array.isArray(parsed) ? parsed : [parsed];
+      const ignoredNames = new Set(['conhost.exe']);
+
+      entries.forEach((entry) => {
+        const parentPid = Number(entry.ParentProcessId);
+        if (!childrenByParent.has(parentPid)) return;
+        if (ignoredNames.has(String(entry.Name || '').toLowerCase())) return;
+        childrenByParent.get(parentPid).push(entry);
+      });
+
+      return childrenByParent;
+    }
+
+    const stdout = await new Promise((resolve, reject) => {
+      execFile('ps', ['-eo', 'pid=,ppid=,comm='], { timeout: 1500, maxBuffer: 1024 * 1024 }, (error, out) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(out);
+      });
+    });
+
+    String(stdout || '').split('\n').forEach((line) => {
+      const parts = line.trim().split(/\s+/, 3);
+      if (parts.length < 2) return;
+      const pid = Number(parts[0]);
+      const parentPid = Number(parts[1]);
+      if (!Number.isFinite(pid) || !childrenByParent.has(parentPid)) return;
+      childrenByParent.get(parentPid).push({ ProcessId: pid });
+    });
+  } catch (error) {
+    console.warn('[Main] Terminal status probe failed:', error.message);
+  }
+
+  return childrenByParent;
+}
+
+function ensureTerminalStatusMonitor() {
+  if (terminalStatusInterval) return;
+
+  terminalStatusInterval = setInterval(async () => {
+    const ptyIds = [...terminals.keys()];
+    if (!ptyIds.length) {
+      stopTerminalStatusMonitorIfIdle();
+      return;
+    }
+
+    const parentPids = ptyIds.map(id => Number(id)).filter(Number.isFinite);
+    const childrenByParent = await getChildProcessesByParent(parentPids);
+
+    ptyIds.forEach((ptyId) => {
+      const pid = Number(ptyId);
+      const children = childrenByParent.get(pid) || [];
+      setTerminalRunning(ptyId, children.length > 0);
+    });
+  }, TERMINAL_STATUS_INTERVAL_MS);
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -194,6 +300,9 @@ ipcMain.handle('terminal:create', (event, { cwd }) => {
 
   const ptyId = ptyProcess.pid.toString();
   terminals.set(ptyId, ptyProcess);
+  terminalRunningStates.set(ptyId, false);
+  sendTerminalStatus(ptyId, false);
+  ensureTerminalStatusMonitor();
   console.log(`[Main] PTY Created: ${ptyId} for ${cwd}`);
 
   ptyProcess.onData((data) => {
@@ -205,6 +314,9 @@ ipcMain.handle('terminal:create', (event, { cwd }) => {
 
   ptyProcess.onExit(() => {
     terminals.delete(ptyId);
+    terminalRunningStates.delete(ptyId);
+    sendTerminalStatus(ptyId, false);
+    stopTerminalStatusMonitorIfIdle();
     if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
         mainWindow.webContents.send('terminal:exit', { ptyId });
     }
@@ -219,6 +331,9 @@ ipcMain.on('terminal:destroy', (event, { ptyId }) => {
   if (ptyProcess) {
     ptyProcess.kill();
     terminals.delete(ptyId);
+    terminalRunningStates.delete(ptyId);
+    sendTerminalStatus(ptyId, false);
+    stopTerminalStatusMonitorIfIdle();
     console.log(`[Main] PTY Destroyed: ${ptyId}`);
   }
 });
@@ -230,6 +345,8 @@ function killAllTerminals() {
         ptyProcess.kill();
     }
     terminals.clear();
+    terminalRunningStates.clear();
+    stopTerminalStatusMonitorIfIdle();
 }
 
 app.on('before-quit', killAllTerminals);
