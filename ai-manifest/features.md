@@ -1,48 +1,62 @@
 # Features Details - PowerTerminal
 
-## 1. Scanner & Auto-Detection
-Le système de scan doit être efficace et non bloquant.
+## 1. Gestion des Projets
 
-### Logique de Détection
-L'app scanne le dossier racine (`d:/Créations/Programmation/`) et identifie les projets via des "signatures" :
-- **Node.js** : `package.json`
-- **Rust** : `Cargo.toml`
-- **Python** : `requirements.txt`, `pyproject.toml`
-- **Go** : `go.mod`
-- **Docker** : `docker-compose.yml`
+### Ajout / Suppression
+- Ajout manuel via dialogue natif (`project:pick-folder`).
+- Suppression logique via flag `_removed` dans `projectMetadata`.
+- Favoris et logos personnalisés gérés dans les métadonnées.
 
-### Scripts Automatiques
-Pour Node.js, PowerTerminal extrait les clés de l'objet `"scripts"` du `package.json` pour peupler instantanément le dashboard.
+### Source de vérité
+- Les projets affichés proviennent de `projectMetadata` uniquement.
+- Pas de scan automatique de dossiers dans la version actuelle.
 
-## 2. Command Engine
-Chaque commande est exécutée via un processus `node-pty`.
+## 2. Commandes Personnalisées
 
-### Command Customization
-Structure d'une commande stockée dans `metadata` :
+### Modèle de commande
 ```json
 {
+  "emoji": "🚀",
   "label": "Start Dev",
-  "command": "npm run dev",
-  "emoji": "🚀"
+  "command": "npm run dev"
 }
 ```
-L'interface utilise un **Emoji Picker** (80 options) pour simplifier la personnalisation sans librairies d'icônes externes.
 
-### Templating System
-Support des placeholders :
-- `{{root}}` : Chemin racine du projet.
-- `{{activeTerminal}}` : ID du terminal en focus.
-- `{{input:Label}}` : Déclenche un prompt UI avant exécution.
+### Capacités
+- Création, édition, suppression.
+- Réorganisation drag & drop.
+- Lancement dans le terminal actif du projet.
+- Si terminal absent ou invalide: auto-création/ré-attachement avant exécution.
 
-## 3. Persistent Storage
-Utilisation de `electron-store` ou d'un simple fichier JSON dans `userData`.
+### Limites actuelles
+- Pas de templating (`{{root}}`, `{{input:...}}`, etc.) implémenté.
+- Pas d'import auto des scripts `package.json`.
 
-### Données stockées :
-- `projects.json` : Historique des projets connus, icônes personnalisées.
-- `config.json` : Thèmes, préférences de shell (PowerShell/CMD/Bash).
-- `sessions/` : Dossier contenant l'état des terminaux (logs récents et chemins) pour restauration.
+## 3. Gestion Multi-Terminal
 
-## 4. Multi-Terminal Management
-- **State Store** : Liste d'objets `TerminalInstance` avec IDs uniques.
-- **Adaptive Tabs** : Système de compaction automatique des onglets horizontaux pour éviter l'élargissement de la colonne.
-- **Shutdown** : Bouton "-" dédié pour terminer proprement le processus PTY actif et libérer les ressources.
+### Cycle de vie
+- Création via `node-pty`.
+- Entrée clavier forwardée vers PTY.
+- Resize dynamique via `xterm-addon-fit` + `ResizeObserver`.
+- Destruction explicite d'un terminal ou cleanup global à la fermeture app.
+
+### Statut d'activité (`running`)
+- `main` publie `terminal:status` périodiquement.
+- Statut basé sur présence de processus enfants du PTY.
+- `renderer` applique l'état sur tabs, sidebar et cartes projet.
+
+### Règle UX
+- Le point vert indique uniquement `running=true`.
+- Un terminal ouvert mais idle ne doit pas afficher l'indicateur actif.
+
+## 4. Persistance
+
+### Stockage
+- Fichier local `config.json` (racine projet app).
+- Clés principales:
+  - `rootPath`
+  - `projectMetadata`
+
+### Non implémenté actuellement
+- Pas de session persistée des terminaux (tabs/logs/cwd runtime).
+- Pas de dossier `sessions/`.

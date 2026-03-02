@@ -77,12 +77,13 @@ async function getChildProcessesByParent(parentPids) {
 
   try {
     if (process.platform === 'win32') {
-      const pidList = parentPids.join(',');
-      const script = `$parents = @(${pidList}); Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -in $parents } | Select-Object ParentProcessId, ProcessId, Name | ConvertTo-Json -Compress`;
+      const filter = parentPids.map(pid => `ParentProcessId=${pid}`).join(' OR ');
+      const script = `Get-CimInstance Win32_Process -Filter "${filter}" | Select-Object ParentProcessId, ProcessId, Name | ConvertTo-Json -Compress`;
       const stdout = await new Promise((resolve, reject) => {
-        execFile('powershell.exe', ['-NoProfile', '-Command', script], { windowsHide: true, timeout: 1500, maxBuffer: 1024 * 1024 }, (error, out) => {
+        execFile('powershell.exe', ['-NoProfile', '-Command', script], { windowsHide: true, timeout: 5000, maxBuffer: 1024 * 1024 }, (error, out, err) => {
           if (error) {
-            reject(error);
+            const details = String(err || '').trim();
+            reject(new Error(details ? `${error.message}\n${details}` : error.message));
             return;
           }
           resolve(out);
@@ -126,6 +127,7 @@ async function getChildProcessesByParent(parentPids) {
     });
   } catch (error) {
     console.warn('[Main] Terminal status probe failed:', error.message);
+    return null;
   }
 
   return childrenByParent;
@@ -143,6 +145,9 @@ function ensureTerminalStatusMonitor() {
 
     const parentPids = ptyIds.map(id => Number(id)).filter(Number.isFinite);
     const childrenByParent = await getChildProcessesByParent(parentPids);
+    if (!childrenByParent) {
+      return;
+    }
 
     ptyIds.forEach((ptyId) => {
       const pid = Number(ptyId);

@@ -1,57 +1,38 @@
 # PowerTerminal
 
-Un terminal de développement contextuel sous Windows, construit avec Electron + xterm.js.
-
-Chaque projet a son propre espace : terminal intégré, commandes rapides personnalisables, logo, et raccourcis favoris.
+PowerTerminal est une app desktop Windows pour lancer rapidement des commandes par projet, avec un terminal intégré.
 
 ![Electron](https://img.shields.io/badge/Electron-31-47848F?logo=electron) ![xterm.js](https://img.shields.io/badge/xterm.js-5-green) ![Windows](https://img.shields.io/badge/Windows-11-0078D4?logo=windows)
 
----
-
 ## Aperçu
 
-| Accueil | Dashboard projet |
-|---------|-----------------|
-| ![Accueil](assets/screenshots/dashboard.png) | ![Dashboard](assets/screenshots/selection.png) |
+| Projets | Dashboard |
+|---------|-----------|
+| ![Projets](assets/screenshots/selection.png) | ![Dashboard](assets/screenshots/dashboard.png) |
 
-> *Accueil : liste des projets avec favoris. Dashboard : commandes rapides + terminal intégré.*
+## Ce que fait l'app
 
----
-
-## Fonctionnalités
-
-- **Multi-projets** — ajout manuel de projets via sélecteur de dossier natif
-- **Terminal intégré** — PowerShell via node-pty + xterm.js avec support multi-onglets
-- **Commandes rapides** — boutons personnalisables par projet (emoji, nom, commande shell)
-- **Favoris** — accès rapide aux projets épinglés dans la barre latérale
-- **Personnalisation** — nom affiché, logo, dossier racine par projet
-- **Disposition adaptative** — layout horizontal ou vertical selon la taille de fenêtre
-- **Config persistante** — toutes les données sont stockées dans `config.json` à la racine
-
----
+- Ajout manuel de projets via sélecteur de dossier
+- Commandes personnalisées par projet (`emoji`, `label`, `command`)
+- Terminal intégré avec multi-onglets
+- Indicateur d'activité (`running`) basé sur les vrais processus en cours
+- Persistance locale dans `config.json`
 
 ## Stack
 
-| Composant | Techno |
-|-----------|--------|
-| Shell app | Electron 31 |
-| Terminal | xterm.js 5 + node-pty |
-| Build | Vite + vite-plugin-electron |
-| Packaging | electron-builder (portable) |
-| Config | `config.json` (JSON natif) |
+- Electron 31
+- Vite 5 + `vite-plugin-electron`
+- `xterm.js` + `xterm-addon-fit`
+- `node-pty`
 
----
-
-## Installation
+## Démarrage
 
 ```bash
 npm install
 npm run dev
 ```
 
-> node-pty nécessite une compilation native. Avoir Python et les Build Tools Visual Studio installés.
-
----
+Note Windows: `start-dev.bat` lance aussi le mode dev.
 
 ## Build
 
@@ -59,13 +40,16 @@ npm run dev
 npm run build
 ```
 
-Génère un exécutable portable Windows dans `/release`.
+Le build génère un exécutable portable Windows dans `release/`.
 
----
+## Configuration locale
 
-## Configuration
+Le fichier `config.json` est créé automatiquement. Clés principales:
 
-Le fichier `config.json` est créé automatiquement à la racine du projet au premier ajout de projet. Il contient :
+- `rootPath`
+- `projectMetadata`
+
+Exemple minimal:
 
 ```json
 {
@@ -88,24 +72,27 @@ Le fichier `config.json` est créé automatiquement à la racine du projet au pr
 }
 ```
 
-> `config.json` est ignoré par git — chaque utilisateur a sa propre configuration locale.
-
----
+`config.json` est local (ignoré par git).
 
 ## Structure
 
-```
+```text
 PowerTerminal/
 ├── src/
 │   ├── main/
-│   │   ├── main.js        # Process principal Electron (IPC, PTY, config)
-│   │   └── preload.js     # Bridge contextIsolation
+│   │   ├── main.js
+│   │   └── preload.js
 │   └── renderer/
-│       ├── js/app.js      # UI, state, terminal, projets
+│       ├── js/app.js
 │       └── style/main.css
 ├── index.html
-├── config.json            # Config locale (gitignored)
-├── logo.ico
+├── config.json
 ├── package.json
 └── vite.config.js
 ```
+
+## License
+Ce projet est distribué sous licence AGPL-3.0.
+
+---
+*Codé 100% par des IA, supervisé à l'arrache par Obat 😏*

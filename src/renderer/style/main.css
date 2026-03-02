@@ -231,12 +231,27 @@ html, body {
     gap: 0.6rem;
     min-width: 0;
     overflow: hidden;
+    position: relative;
 }
 
 .project-item:hover {
     background: rgba(255, 255, 255, 0.08);
     border-color: var(--primary);
     transform: scale(1.01);
+}
+
+.project-item.running::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #111214;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.9);
+    pointer-events: none;
 }
 
 .project-item .info {

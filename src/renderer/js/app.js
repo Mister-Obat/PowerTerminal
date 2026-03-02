@@ -189,7 +189,7 @@ function renderProjectLists() {
 
 function createProjectItem(p) {
     const item = document.createElement('div');
-    item.className = 'project-item';
+    item.className = 'project-item' + (isProjectRunning(p.path) ? ' running' : '');
 
     const initial = (p.displayName || p.name || '?')[0].toUpperCase();
     const avatarContent = p.logoPath
@@ -463,6 +463,7 @@ function cleanupTerminals() {
         t.container.remove();
     });
     state.terminals = [];
+    renderProjectLists();
     renderSidebarFavorites();
 }
 
@@ -479,6 +480,7 @@ function removeActiveTerminal() {
     
     // Remove from state
     state.terminals.splice(index, 1);
+    renderProjectLists();
     renderSidebarFavorites();
     
     // Switch to another terminal
@@ -870,6 +872,7 @@ window.api.onTerminalStatus(({ ptyId, running }) => {
     if (!term) return;
     if (term.isRunning === !!running) return;
     term.isRunning = !!running;
+    renderProjectLists();
     renderSidebarFavorites();
     renderTabs();
 });
@@ -893,6 +896,7 @@ window.api.onTerminalExit(({ ptyId }) => {
         renderTabs();
     }
 
+    renderProjectLists();
     renderSidebarFavorites();
 });
 
