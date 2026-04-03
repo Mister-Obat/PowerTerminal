@@ -786,15 +786,7 @@ html, body {
 }
 
 .sidebar-fav-item.drag-source {
-    position: absolute !important;
-    opacity: 0 !important;
-    pointer-events: none;
-    width: 0 !important;
-    height: 0 !important;
-    margin: 0 !important;
-    border: 0 !important;
-    padding: 0 !important;
-    overflow: hidden !important;
+    display: none !important;
 }
 .sidebar-favorites.drag-active .sidebar-fav-item:hover {
     transform: none;

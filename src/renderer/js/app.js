@@ -802,7 +802,6 @@ async function addTerminal(cwd) {
     
     const ptyId = await window.api.createTerminal(cwd);
     state.terminals.push({ id, ptyId, xterm: term, fitAddon, container, projectId: state.activeProjectId, isRunning: false });
-    renderSidebarFavorites();
 
     term.onData(data => window.api.sendInput(ptyId, data));
 
@@ -1128,21 +1127,12 @@ function updateSidebarDropHintFromPointer(clientX, clientY) {
     let lineY = null;
 
     if (isHorizontalBar) {
-        if (clientX <= firstRect.left) {
-            insertIndex = 0;
-        } else if (clientX >= lastRect.right) {
-            insertIndex = candidates.length;
-        } else {
-            for (let idx = 0; idx < candidates.length - 1; idx += 1) {
-                const prevRect = candidates[idx].getBoundingClientRect();
-                const nextRect = candidates[idx + 1].getBoundingClientRect();
-                const gapCenter = (prevRect.right + nextRect.left) / 2;
-                if (clientX < gapCenter) {
-                    insertIndex = idx + 1;
-                    break;
-                }
-            }
-        }
+        const midpoints = candidates.map((node) => {
+            const rect = node.getBoundingClientRect();
+            return rect.left + (rect.width / 2);
+        });
+        insertIndex = midpoints.findIndex((midpoint) => clientX < midpoint);
+        if (insertIndex === -1) insertIndex = candidates.length;
 
         if (insertIndex <= 0) {
             lineX = (firstRect.left - containerRect.left) - 4;
@@ -1154,21 +1144,12 @@ function updateSidebarDropHintFromPointer(clientX, clientY) {
             lineX = ((prevRect.right + nextRect.left) / 2) - containerRect.left;
         }
     } else {
-        if (clientY <= firstRect.bottom) {
-            insertIndex = 0;
-        } else if (clientY >= lastRect.bottom) {
-            insertIndex = candidates.length;
-        } else {
-            for (let idx = 0; idx < candidates.length - 1; idx += 1) {
-                const prevRect = candidates[idx].getBoundingClientRect();
-                const nextRect = candidates[idx + 1].getBoundingClientRect();
-                const gapCenter = (prevRect.bottom + nextRect.top) / 2;
-                if (clientY < gapCenter) {
-                    insertIndex = idx + 1;
-                    break;
-                }
-            }
-        }
+        const midpoints = candidates.map((node) => {
+            const rect = node.getBoundingClientRect();
+            return rect.top + (rect.height / 2);
+        });
+        insertIndex = midpoints.findIndex((midpoint) => clientY < midpoint);
+        if (insertIndex === -1) insertIndex = candidates.length;
 
         if (insertIndex <= 0) {
             lineY = (firstRect.top - containerRect.top) - 4;
@@ -1280,7 +1261,12 @@ function renderSidebarFavorites() {
             dom.sidebarFavorites.classList.add('drag-active');
             event.dataTransfer.setData('text/plain', p.path);
             event.dataTransfer.effectAllowed = 'move';
-            updateSidebarDropHintFromPointer(event.clientX, event.clientY);
+            setTimeout(() => {
+                if (state.draggingProjectPath === p.path) {
+                    item.classList.add('drag-source');
+                }
+            }, 0);
+            clearSidebarDropHints();
         };
 
         item.ondragover = (event) => {
@@ -1301,6 +1287,7 @@ function renderSidebarFavorites() {
 
         item.ondragend = () => {
             item.classList.remove('dragging');
+            item.classList.remove('drag-source');
             clearSidebarDropHints();
             dom.sidebarFavorites.classList.remove('drag-active');
             state.projectDragMoved = false;
