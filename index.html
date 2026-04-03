@@ -111,6 +111,16 @@
                 <div id="sidebar-favorites" class="sidebar-favorites"></div>
 
                 <div class="sidebar-footer">
+                    <button id="open-ports-view" class="btn-side-action" title="Ports actifs">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="4" y="4" width="16" height="4" rx="1.5"></rect>
+                            <rect x="4" y="10" width="16" height="4" rx="1.5"></rect>
+                            <rect x="4" y="16" width="16" height="4" rx="1.5"></rect>
+                            <circle cx="8" cy="6" r="0.8" fill="currentColor"></circle>
+                            <circle cx="8" cy="12" r="0.8" fill="currentColor"></circle>
+                            <circle cx="8" cy="18" r="0.8" fill="currentColor"></circle>
+                        </svg>
+                    </button>
                     <button id="add-custom-command" class="btn-add-cmd" title="Ajouter une commande">+</button>
                 </div>
             </aside>
@@ -143,6 +153,38 @@
                         </div>
                     </div>
                 </section>
+            </div>
+        </section>
+
+        <section id="ports-view" class="view hidden">
+            <div class="ports-header">
+                <div class="ports-header-left">
+                    <button id="ports-back-btn" class="btn-back" title="Retour au dashboard">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M19 12H5M12 5l-7 7 7 7"/>
+                        </svg>
+                    </button>
+                    <div>
+                        <h2>Ports actifs</h2>
+                        <p>Liste runtime des ports en écoute et kill en un clic.</p>
+                    </div>
+                </div>
+                <button id="ports-refresh-btn" class="btn-add-project">Rafraîchir</button>
+            </div>
+            <div id="ports-feedback" class="ports-feedback hidden"></div>
+            <div class="ports-table-wrap">
+                <table class="ports-table">
+                    <thead>
+                        <tr>
+                            <th>Port</th>
+                            <th>PID</th>
+                            <th>Processus</th>
+                            <th>Commande</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ports-list-body"></tbody>
+                </table>
             </div>
         </section>
     </div>

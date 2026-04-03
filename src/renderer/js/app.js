@@ -14,12 +14,15 @@ const state = {
     editingProject: null,
     editingCommandIndex: null,
     deleteCallback: null,
-    recentlyOpened: [] // Array of project paths opened in current session (non-favorites only)
+    recentlyOpened: [], // Array of project paths opened in current session (non-favorites only)
+    ports: [],
+    portsFeedback: null
 };
 
 const dom = {
     selectionView: document.getElementById('selection-view'),
     dashboardView: document.getElementById('dashboard-view'),
+    portsView: document.getElementById('ports-view'),
     projectList: document.getElementById('project-list'),
     favoritesList: document.getElementById('favorites-list'),
     backBtn: document.getElementById('back-to-selection'),
@@ -29,6 +32,11 @@ const dom = {
     addTerminalBtn: document.getElementById('add-terminal'),
     removeTerminalBtn: document.getElementById('remove-terminal'),
     addCustomCmdBtn: document.getElementById('add-custom-command'),
+    openPortsViewBtn: document.getElementById('open-ports-view'),
+    portsBackBtn: document.getElementById('ports-back-btn'),
+    portsRefreshBtn: document.getElementById('ports-refresh-btn'),
+    portsListBody: document.getElementById('ports-list-body'),
+    portsFeedback: document.getElementById('ports-feedback'),
 
     addProjectBtn: document.getElementById('add-project-btn'),
 
@@ -83,14 +91,88 @@ async function goBack() {
  */
 function renderView(viewName) {
     state.currentView = viewName;
-    if (viewName === 'selection') {
-        dom.selectionView.classList.remove('hidden');
-        dom.dashboardView.classList.add('hidden');
+    const showSelection = viewName === 'selection';
+    const showDashboard = viewName === 'dashboard';
+    const showPorts = viewName === 'ports';
+
+    dom.selectionView.classList.toggle('hidden', !showSelection);
+    dom.dashboardView.classList.toggle('hidden', !showDashboard);
+    dom.portsView.classList.toggle('hidden', !showPorts);
+
+    if (showSelection) {
         loadProjects();
-    } else {
-        dom.selectionView.classList.add('hidden');
-        dom.dashboardView.classList.remove('hidden');
     }
+}
+
+function setPortsFeedback(message, type = 'success') {
+    if (!message) {
+        dom.portsFeedback.classList.add('hidden');
+        dom.portsFeedback.textContent = '';
+        dom.portsFeedback.classList.remove('success', 'error');
+        return;
+    }
+    dom.portsFeedback.textContent = message;
+    dom.portsFeedback.classList.remove('hidden', 'success', 'error');
+    dom.portsFeedback.classList.add(type);
+}
+
+function escapeHtml(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function renderPortsRows() {
+    dom.portsListBody.innerHTML = '';
+    if (!state.ports.length) {
+        const row = document.createElement('tr');
+        row.innerHTML = `<td colspan="5" class="ports-empty">Aucun port actif détecté.</td>`;
+        dom.portsListBody.appendChild(row);
+        return;
+    }
+
+    state.ports.forEach((entry) => {
+        const row = document.createElement('tr');
+        const safeName = escapeHtml(entry.processName || 'Inconnu');
+        const safeCmd = escapeHtml(entry.command || '—');
+        row.innerHTML = `
+            <td><span class="port-tag">:${entry.port}</span></td>
+            <td>${entry.pid}</td>
+            <td>${safeName}</td>
+            <td class="command-cell" title="${safeCmd}">${safeCmd}</td>
+            <td><button class="btn-kill-port" data-pid="${entry.pid}" data-port="${entry.port}">Kill</button></td>
+        `;
+        dom.portsListBody.appendChild(row);
+    });
+}
+
+async function refreshPortsList() {
+    try {
+        state.ports = await window.api.listActivePorts();
+        renderPortsRows();
+    } catch (error) {
+        setPortsFeedback(`Impossible de charger les ports: ${error.message}`, 'error');
+    }
+}
+
+async function openPortsView() {
+    renderView('ports');
+    setPortsFeedback(null);
+    await refreshPortsList();
+}
+
+async function killPortProcess(pid, port) {
+    const result = await window.api.killProcessByPid(pid);
+    if (!result?.ok) {
+        const error = result?.error || 'Erreur inconnue';
+        setPortsFeedback(`Kill impossible sur :${port} (PID ${pid}) - ${error}`, 'error');
+        return;
+    }
+    setPortsFeedback(`Processus PID ${pid} (port :${port}) stoppé.`, 'success');
+    await refreshPortsList();
 }
 
 /**
@@ -728,6 +810,9 @@ async function init() {
     dom.addProjectBtn.onclick = addProject;
     document.getElementById('donate-btn').onclick = () => window.api.openUrl('https://www.paypal.com/paypalme/creaprisme');
     dom.backBtn.onclick = goBack;
+    dom.openPortsViewBtn.onclick = openPortsView;
+    dom.portsBackBtn.onclick = () => renderView('dashboard');
+    dom.portsRefreshBtn.onclick = refreshPortsList;
     dom.addTerminalBtn.onclick = () => addTerminal(state.activeProjectRoot);
     dom.removeTerminalBtn.onclick = removeActiveTerminal;
     dom.addCustomCmdBtn.onclick = openAddCommandModal;
@@ -751,6 +836,14 @@ async function init() {
 
     dom.deleteCancelBtn.onclick = () => { dom.deleteModal.classList.add('hidden'); focusActiveTerminal(); };
     dom.deleteConfirmBtn.onclick = deleteCommand;
+
+    dom.portsListBody.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.btn-kill-port');
+        if (!btn) return;
+        const pid = Number(btn.dataset.pid);
+        const port = Number(btn.dataset.port);
+        await killPortProcess(pid, port);
+    });
 
     // Entrée = valider dans les fenêtres d'édition
     document.addEventListener('keydown', (e) => {

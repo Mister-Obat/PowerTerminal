@@ -410,7 +410,8 @@ html, body {
 }
 
 #dashboard-view.vertical .col-left .btn-back,
-#dashboard-view.vertical .col-left .btn-add-cmd {
+#dashboard-view.vertical .col-left .btn-add-cmd,
+#dashboard-view.vertical .col-left .btn-side-action {
     width: 46px;
     height: 46px;
     font-size: 1.2rem;
@@ -574,26 +575,48 @@ html, body {
 .sidebar-footer {
     margin-top: auto;
     display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.55rem;
     justify-content: center;
     width: 100%;
     padding-bottom: 0.5rem;
     flex-shrink: 0;
 }
 
-.btn-add-cmd {
+.btn-add-cmd,
+.btn-side-action {
     width: 44px;
     height: 44px;
     border-radius: 50%;
-    background: var(--primary);
-    border: none;
-    color: #fff;
-    font-size: 1.5rem;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    color: var(--text-main);
+    font-size: 1.1rem;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: 0.2s;
     line-height: 1;
+}
+
+.btn-add-cmd {
+    background: var(--primary);
+    border: none;
+    font-size: 1.5rem;
+}
+
+.btn-side-action:hover {
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    border-color: var(--primary);
+    transform: scale(1.08);
+}
+
+.btn-add-cmd:hover {
+    transform: scale(1.08);
+    filter: brightness(1.15);
 }
 
 .active-path-editor input {
@@ -1006,4 +1029,119 @@ html, body {
     color: white;
     border-color: var(--primary);
     transform: scale(1.1);
+}
+
+/* Ports view */
+.ports-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.ports-header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.ports-header h2 {
+    font-size: 1.4rem;
+    margin-bottom: 0.2rem;
+}
+
+.ports-header p {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+}
+
+.ports-feedback {
+    margin-top: 1rem;
+    border: 1px solid var(--glass-border);
+    border-radius: 0.6rem;
+    padding: 0.7rem 0.9rem;
+    background: var(--glass);
+    color: var(--text-main);
+    font-size: 0.9rem;
+}
+
+.ports-feedback.success {
+    border-color: rgba(16, 185, 129, 0.45);
+    background: rgba(16, 185, 129, 0.15);
+}
+
+.ports-feedback.error {
+    border-color: rgba(239, 68, 68, 0.45);
+    background: rgba(239, 68, 68, 0.14);
+}
+
+.ports-table-wrap {
+    margin-top: 1rem;
+    border: 1px solid var(--glass-border);
+    border-radius: 0.8rem;
+    overflow: auto;
+    background: var(--glass);
+}
+
+.ports-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 760px;
+}
+
+.ports-table th,
+.ports-table td {
+    padding: 0.75rem 0.8rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    text-align: left;
+    font-size: 0.85rem;
+}
+
+.ports-table th {
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.72rem;
+}
+
+.ports-table td.command-cell {
+    max-width: 460px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #c8d2df;
+    font-family: 'Fira Code', monospace;
+    font-size: 0.78rem;
+}
+
+.port-tag {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+    font-weight: 700;
+    background: rgba(99, 102, 241, 0.2);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+}
+
+.btn-kill-port {
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+    border-radius: 0.45rem;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.btn-kill-port:hover {
+    background: rgba(239, 68, 68, 0.3);
+    color: #fff;
+    border-color: var(--danger);
+}
+
+.ports-empty {
+    padding: 1.2rem;
+    color: var(--text-dim);
 }

@@ -60,3 +60,16 @@
 ### Non implémenté actuellement
 - Pas de session persistée des terminaux (tabs/logs/cwd runtime).
 - Pas de dossier `sessions/`.
+
+## 5. Port Monitor (inspiré Port Whisperer)
+
+### Capacités
+- Depuis le dashboard, un bouton dédié ouvre une page "Ports actifs".
+- La page liste les ports TCP en écoute avec PID, process et commande.
+- Chaque ligne expose une action `Kill` en un clic pour stopper le processus.
+- Après kill, la liste est rafraîchie immédiatement pour refléter l'état réel.
+
+### Contraintes
+- Les données ports/process sont collectées côté `main` via IPC, jamais directement depuis le renderer.
+- Le renderer ne doit afficher que l'état runtime actuel (pas de cache persistant).
+- En cas d'échec kill (droits insuffisants, PID invalide), l'UI doit afficher un message d'erreur clair.

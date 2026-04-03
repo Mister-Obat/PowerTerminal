@@ -157,6 +157,36 @@ function ensureTerminalStatusMonitor() {
   }, TERMINAL_STATUS_INTERVAL_MS);
 }
 
+function runPowerShellJson(script, timeout = 7000) {
+  return new Promise((resolve, reject) => {
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-Command', script],
+      { windowsHide: true, timeout, maxBuffer: 2 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) {
+          const details = String(stderr || '').trim();
+          reject(new Error(details ? `${error.message}\n${details}` : error.message));
+          return;
+        }
+
+        const raw = String(stdout || '').trim();
+        if (!raw) {
+          resolve([]);
+          return;
+        }
+
+        try {
+          const parsed = JSON.parse(raw);
+          resolve(Array.isArray(parsed) ? parsed : [parsed]);
+        } catch (parseError) {
+          reject(new Error(`Invalid PowerShell JSON output: ${parseError.message}`));
+        }
+      }
+    );
+  });
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -284,6 +314,85 @@ ipcMain.handle('project:save-metadata', async (event, metadata) => {
   const config = await readConfig();
   config.projectMetadata = metadata;
   await writeConfig(config);
+});
+
+ipcMain.handle('ports:list', async () => {
+  if (process.platform !== 'win32') {
+    return [];
+  }
+
+  const script = `
+$ports = Get-NetTCPConnection -State Listen |
+    Where-Object { $_.OwningProcess -gt 0 } |
+    Select-Object -Property LocalAddress,LocalPort,OwningProcess -Unique
+
+if (-not $ports) {
+    "[]"
+    exit
+}
+
+$pids = $ports | Select-Object -ExpandProperty OwningProcess -Unique
+$procMap = @{}
+foreach ($pid in $pids) {
+    try {
+        $p = Get-CimInstance Win32_Process -Filter "ProcessId=$pid"
+        if ($p) {
+            $procMap[$pid] = [PSCustomObject]@{
+                Name = $p.Name
+                CommandLine = $p.CommandLine
+            }
+        }
+    } catch {}
+}
+
+$rows = foreach ($entry in $ports) {
+    $meta = $procMap[$entry.OwningProcess]
+    [PSCustomObject]@{
+        localAddress = $entry.LocalAddress
+        port = $entry.LocalPort
+        pid = $entry.OwningProcess
+        processName = if ($meta) { $meta.Name } else { $null }
+        command = if ($meta) { $meta.CommandLine } else { $null }
+    }
+}
+
+$rows | Sort-Object -Property port, pid | ConvertTo-Json -Compress
+`;
+
+  const rows = await runPowerShellJson(script, 10000);
+  return rows.map((entry) => ({
+    localAddress: String(entry.localAddress || ''),
+    port: Number(entry.port) || 0,
+    pid: Number(entry.pid) || 0,
+    processName: String(entry.processName || ''),
+    command: String(entry.command || ''),
+  })).filter((entry) => entry.port > 0 && entry.pid > 0);
+});
+
+ipcMain.handle('ports:kill-process', async (event, { pid }) => {
+  const normalizedPid = Number(pid);
+  if (!Number.isFinite(normalizedPid) || normalizedPid <= 0) {
+    return { ok: false, error: 'PID invalide.' };
+  }
+
+  if (process.platform !== 'win32') {
+    return { ok: false, error: 'Fonction disponible uniquement sur Windows.' };
+  }
+
+  const script = `
+try {
+    Stop-Process -Id ${normalizedPid} -Force -ErrorAction Stop
+    @{ ok = $true } | ConvertTo-Json -Compress
+} catch {
+    @{ ok = $false; error = $_.Exception.Message } | ConvertTo-Json -Compress
+}
+`;
+
+  const [result] = await runPowerShellJson(script, 8000);
+  if (result && result.ok) {
+    return { ok: true };
+  }
+  return { ok: false, error: String(result?.error || 'Impossible de tuer le processus.') };
 });
 
 // IPC Handler: Create Terminal (PTY)

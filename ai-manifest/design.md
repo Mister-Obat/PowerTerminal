@@ -33,6 +33,12 @@ Le design doit évoquer la puissance et la clarté.
 - **Tabs Bar** : Barre d'onglets compacte avec bouton "+" et "－".
 - **Compaction** : Réduction adaptive de la largeur des onglets avec troncature du texte (`ellipsis`).
 
+### Port Monitor Page
+- **Entrée** : bouton icône "ports/processus" dans la sidebar dashboard, positionné au-dessus du bouton `+`.
+- **Liste** : cartes/lignes glassmorphism affichant `port`, `pid`, `process`, `commande`.
+- **Action principale** : bouton `Kill` rouge à droite de chaque ligne, visible en permanence.
+- **Feedback** : message d'état en haut de page (succès/erreur) après tentative kill.
+
 ## 3. Animations & Transitions
 - **Page Change** : Slide-fade entre le sélecteur et le dashboard.
 - **Terminal Open** : Expand de bas en haut.

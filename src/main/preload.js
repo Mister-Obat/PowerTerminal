@@ -31,4 +31,8 @@ contextBridge.exposeInMainWorld('api', {
 
   // Open URL in default browser
   openUrl: (url) => ipcRenderer.send('shell:open-url', url),
+
+  // Ports monitor
+  listActivePorts: () => ipcRenderer.invoke('ports:list'),
+  killProcessByPid: (pid) => ipcRenderer.invoke('ports:kill-process', { pid }),
 });
