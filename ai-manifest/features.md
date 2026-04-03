@@ -64,8 +64,8 @@
 ## 5. Port Monitor
 
 ### Capacités
-- Depuis le dashboard, un bouton dédié ouvre une page "Ports actifs".
-- La page liste les ports TCP en écoute avec colonnes enrichies: `port`, `process`, `pid`, `program`, `framework`, `status`.
+- Depuis le menu de navigation global en haut, un bouton dédié ouvre la page "Ports actifs".
+- La page liste les ports TCP en écoute avec colonnes enrichies: `port`, `process`, `pid`, `program`, `framework`.
 - Pendant le chargement des ports, un indicateur visuel est affiché directement dans la zone de liste.
 - Chaque colonne du tableau ports est redimensionnable indépendamment via drag sur l'entête.
 - Chaque ligne expose une action `Kill` en un clic pour stopper le processus.

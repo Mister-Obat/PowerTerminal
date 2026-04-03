@@ -21,23 +21,25 @@ const state = {
 };
 
 const dom = {
+    navWorkspaceBtn: document.getElementById('nav-workspace-btn'),
+    navProjectsBtn: document.getElementById('nav-projects-btn'),
+    navPortsBtn: document.getElementById('nav-ports-btn'),
     selectionView: document.getElementById('selection-view'),
     dashboardView: document.getElementById('dashboard-view'),
     portsView: document.getElementById('ports-view'),
     projectList: document.getElementById('project-list'),
     favoritesList: document.getElementById('favorites-list'),
-    backBtn: document.getElementById('back-to-selection'),
     commandGrid: document.getElementById('command-grid'),
     terminalWrapper: document.getElementById('terminal-wrapper'),
     tabsContainer: document.getElementById('tabs-container'),
     addTerminalBtn: document.getElementById('add-terminal'),
     removeTerminalBtn: document.getElementById('remove-terminal'),
     addCustomCmdBtn: document.getElementById('add-custom-command'),
-    openPortsViewBtn: document.getElementById('open-ports-view'),
-    portsBackBtn: document.getElementById('ports-back-btn'),
     portsRefreshBtn: document.getElementById('ports-refresh-btn'),
     portsListBody: document.getElementById('ports-list-body'),
     portsFeedback: document.getElementById('ports-feedback'),
+    portsTableHeadWrap: document.getElementById('ports-table-head-wrap'),
+    portsTableScroll: document.getElementById('ports-table-scroll'),
 
     addProjectBtn: document.getElementById('add-project-btn'),
 
@@ -67,6 +69,7 @@ const dom = {
     deleteConfirmBtn: document.getElementById('delete-confirm'),
     deleteCancelBtn: document.getElementById('delete-cancel'),
 };
+let portsTableResizeObserver = null;
 
 function focusActiveTerminal() {
     const active = state.terminals.find(t => t.id === state.activeTerminalId);
@@ -77,11 +80,16 @@ function isProjectRunning(projectId) {
     return state.terminals.some(t => t.projectId === projectId && t.isRunning);
 }
 
-/**
- * Confirm before exit
- */
-async function goBack() {
-    renderView('selection');
+function getFirstFavoriteProject() {
+    return state.projects.find(p => p.isFavorite) || null;
+}
+
+function updateTopNav() {
+    const workspaceEnabled = !!state.activeProjectId || !!getFirstFavoriteProject();
+    dom.navWorkspaceBtn.disabled = !workspaceEnabled;
+    dom.navWorkspaceBtn.classList.toggle('active', state.currentView === 'dashboard');
+    dom.navProjectsBtn.classList.toggle('active', state.currentView === 'selection');
+    dom.navPortsBtn.classList.toggle('active', state.currentView === 'ports');
 }
 
 /**
@@ -99,6 +107,7 @@ function renderView(viewName) {
     dom.selectionView.classList.toggle('hidden', !showSelection);
     dom.dashboardView.classList.toggle('hidden', !showDashboard);
     dom.portsView.classList.toggle('hidden', !showPorts);
+    updateTopNav();
 
     if (showSelection) {
         loadProjects();
@@ -126,17 +135,62 @@ function escapeHtml(value) {
         .replace(/'/g, '&#39;');
 }
 
-function initPortsTableResizers() {
-    const table = document.querySelector('.ports-table');
-    if (!table) return;
+function updatePortsHeaderScrollbarGutter() {
+    if (!dom.portsTableHeadWrap || !dom.portsTableScroll) return;
+    const gutter = Math.max(0, dom.portsTableScroll.offsetWidth - dom.portsTableScroll.clientWidth);
+    dom.portsTableHeadWrap.style.paddingRight = `${gutter}px`;
+}
 
-    const headers = Array.from(table.querySelectorAll('thead th'));
-    const cols = Array.from(table.querySelectorAll('colgroup col'));
-    if (!headers.length || headers.length !== cols.length) return;
+function syncPortsTableLayout() {
+    const headTable = document.querySelector('.ports-table-head');
+    const bodyTable = document.querySelector('.ports-table-body');
+    if (!headTable || !bodyTable) return;
+
+    const headCols = Array.from(headTable.querySelectorAll('colgroup col'));
+    const bodyCols = Array.from(bodyTable.querySelectorAll('colgroup col'));
+    if (!headCols.length || headCols.length !== bodyCols.length) return;
+
+    const defaultWidthByIndex = [82, 130, 64, 240, 110, 74];
+    let total = 0;
+    headCols.forEach((headCol, idx) => {
+        if (!headCol.style.width) {
+            headCol.style.width = `${defaultWidthByIndex[idx]}px`;
+        }
+        bodyCols[idx].style.width = headCol.style.width;
+        total += parseFloat(headCol.style.width || `${defaultWidthByIndex[idx]}`) || defaultWidthByIndex[idx];
+    });
+
+    const available = Math.max(
+        0,
+        dom.portsTableScroll?.clientWidth || 0,
+        dom.portsTableHeadWrap?.clientWidth || 0
+    );
+    const minTableWidth = 980;
+    const finalWidth = Math.max(Math.round(total), available, minTableWidth);
+    const px = `${finalWidth}px`;
+    headTable.style.width = px;
+    bodyTable.style.width = px;
+
+    updatePortsHeaderScrollbarGutter();
+}
+
+function initPortsTableResizers() {
+    const headTable = document.querySelector('.ports-table-head');
+    const bodyTable = document.querySelector('.ports-table-body');
+    if (!headTable || !bodyTable) return;
+
+    const headers = Array.from(headTable.querySelectorAll('thead th'));
+    const headCols = Array.from(headTable.querySelectorAll('colgroup col'));
+    const bodyCols = Array.from(bodyTable.querySelectorAll('colgroup col'));
+    if (!headers.length || headers.length !== headCols.length || headCols.length !== bodyCols.length) return;
+    if (headTable.dataset.resizersInitialized === '1') return;
+
+    const minWidthByIndex = [82, 90, 56, 140, 90, 74];
+    const maxWidthByIndex = [220, 420, 180, 1800, 280, 74];
+    syncPortsTableLayout();
 
     headers.forEach((th, index) => {
-        if (th.querySelector('.col-resize-handle')) return;
-
+        if (index === headers.length - 1) return; // Action column stays fixed-size.
         const handle = document.createElement('div');
         handle.className = 'col-resize-handle';
         th.appendChild(handle);
@@ -145,26 +199,54 @@ function initPortsTableResizers() {
             event.preventDefault();
             event.stopPropagation();
 
-            const col = cols[index];
+            const headCol = headCols[index];
+            const bodyCol = bodyCols[index];
             const startX = event.clientX;
-            const startWidth = col.getBoundingClientRect().width || th.getBoundingClientRect().width;
-            const minWidth = 90;
+            const startWidth = Math.round(
+                parseFloat(headCol.style.width || '0')
+                || headCol.getBoundingClientRect().width
+                || th.getBoundingClientRect().width
+                || minWidthByIndex[index]
+            );
+            const minWidth = minWidthByIndex[index] || 90;
+            const maxWidth = maxWidthByIndex[index] || 1200;
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
 
             const onMouseMove = (moveEvent) => {
                 const delta = moveEvent.clientX - startX;
-                const nextWidth = Math.max(minWidth, Math.round(startWidth + delta));
-                col.style.width = `${nextWidth}px`;
+                const nextWidth = Math.min(maxWidth, Math.max(minWidth, Math.round(startWidth + delta)));
+                headCol.style.width = `${nextWidth}px`;
+                bodyCol.style.width = `${nextWidth}px`;
+                syncPortsTableLayout();
             };
 
             const onMouseUp = () => {
                 window.removeEventListener('mousemove', onMouseMove);
                 window.removeEventListener('mouseup', onMouseUp);
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
             };
 
             window.addEventListener('mousemove', onMouseMove);
             window.addEventListener('mouseup', onMouseUp);
         });
     });
+
+    if (dom.portsTableScroll && dom.portsTableHeadWrap) {
+        dom.portsTableScroll.addEventListener('scroll', () => {
+            headTable.style.transform = `translateX(${-dom.portsTableScroll.scrollLeft}px)`;
+        });
+    }
+    if (!portsTableResizeObserver && dom.portsTableScroll) {
+        portsTableResizeObserver = new ResizeObserver(() => {
+            syncPortsTableLayout();
+        });
+        portsTableResizeObserver.observe(dom.portsTableScroll);
+    }
+    window.addEventListener('resize', syncPortsTableLayout);
+
+    headTable.dataset.resizersInitialized = '1';
 }
 
 function renderPortsRows() {
@@ -172,7 +254,7 @@ function renderPortsRows() {
     if (state.portsLoading) {
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td colspan="7" class="ports-loading">
+            <td colspan="6" class="ports-loading">
                 <div class="ports-loading-wrap">
                     <span class="ports-spinner"></span>
                     <span>Chargement des ports actifs...</span>
@@ -180,13 +262,15 @@ function renderPortsRows() {
             </td>
         `;
         dom.portsListBody.appendChild(row);
+        syncPortsTableLayout();
         return;
     }
 
     if (!state.ports.length) {
         const row = document.createElement('tr');
-        row.innerHTML = `<td colspan="7" class="ports-empty">Aucun port actif détecté.</td>`;
+        row.innerHTML = `<td colspan="6" class="ports-empty">Aucun port actif détecté.</td>`;
         dom.portsListBody.appendChild(row);
+        syncPortsTableLayout();
         return;
     }
 
@@ -195,18 +279,17 @@ function renderPortsRows() {
         const safeName = escapeHtml(entry.processName || 'Inconnu');
         const safeProgram = escapeHtml(entry.program || '—');
         const safeFramework = escapeHtml(entry.framework || '—');
-        const safeStatus = escapeHtml(entry.status || 'unknown');
         row.innerHTML = `
             <td><span class="port-tag">:${entry.port}</span></td>
             <td class="process-cell" title="${safeName}">${safeName}</td>
             <td>${entry.pid}</td>
             <td class="program-cell" title="${safeProgram}">${safeProgram}</td>
             <td>${safeFramework}</td>
-            <td><span class="port-status status-${safeStatus}">${safeStatus}</span></td>
             <td><button class="btn-kill-port" data-pid="${entry.pid}" data-port="${entry.port}">Kill</button></td>
         `;
         dom.portsListBody.appendChild(row);
     });
+    syncPortsTableLayout();
 }
 
 async function refreshPortsList() {
@@ -224,6 +307,10 @@ async function refreshPortsList() {
 
 async function openPortsView() {
     renderView('ports');
+    requestAnimationFrame(() => {
+        syncPortsTableLayout();
+        requestAnimationFrame(() => syncPortsTableLayout());
+    });
     setPortsFeedback(null);
     await refreshPortsList();
 }
@@ -299,6 +386,8 @@ async function loadProjects() {
         });
 
     renderProjectLists();
+    renderSidebarFavorites();
+    updateTopNav();
 }
 
 /**
@@ -786,6 +875,22 @@ async function selectProject(p) {
     }
 }
 
+async function openWorkspaceView() {
+    if (state.activeProjectId) {
+        renderView('dashboard');
+        focusActiveTerminal();
+        return;
+    }
+
+    const firstFavorite = getFirstFavoriteProject();
+    if (firstFavorite) {
+        await selectProject(firstFavorite);
+        return;
+    }
+
+    renderView('selection');
+}
+
 function renderSidebarFavorites() {
     dom.sidebarFavorites.innerHTML = '';
     const favs = state.projects.filter(p => p.isFavorite);
@@ -852,6 +957,34 @@ function initEmojiPicker() {
     });
 }
 
+function bindTitlebarManualDrag() {
+    const titlebar = document.getElementById('titlebar');
+    if (!titlebar || titlebar.dataset.dragBound === '1') return;
+    titlebar.dataset.dragBound = '1';
+
+    titlebar.addEventListener('mousedown', (event) => {
+        if (event.button !== 0) return;
+        if (event.target.closest('.window-controls')) return;
+
+        const startClientX = event.clientX;
+        const startClientY = event.clientY;
+
+        const onMouseMove = (moveEvent) => {
+            const nextX = Math.round(moveEvent.screenX - startClientX);
+            const nextY = Math.round(moveEvent.screenY - startClientY);
+            window.api.moveWindow(nextX, nextY);
+        };
+
+        const onMouseUp = () => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+        };
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+    });
+}
+
 /**
  * Initialization
  */
@@ -859,6 +992,7 @@ async function init() {
     document.getElementById('win-min').onclick = () => window.api.windowControl('minimize');
     document.getElementById('win-max').onclick = () => window.api.windowControl('maximize');
     document.getElementById('win-close').onclick = () => window.api.windowControl('close');
+    bindTitlebarManualDrag();
 
     initEmojiPicker();
     initPortsTableResizers();
@@ -874,9 +1008,9 @@ async function init() {
 
     dom.addProjectBtn.onclick = addProject;
     document.getElementById('donate-btn').onclick = () => window.api.openUrl('https://www.paypal.com/paypalme/creaprisme');
-    dom.backBtn.onclick = goBack;
-    dom.openPortsViewBtn.onclick = openPortsView;
-    dom.portsBackBtn.onclick = () => renderView('dashboard');
+    dom.navWorkspaceBtn.onclick = openWorkspaceView;
+    dom.navProjectsBtn.onclick = () => renderView('selection');
+    dom.navPortsBtn.onclick = openPortsView;
     dom.portsRefreshBtn.onclick = refreshPortsList;
     dom.addTerminalBtn.onclick = () => addTerminal(state.activeProjectRoot);
     dom.removeTerminalBtn.onclick = removeActiveTerminal;
@@ -1023,7 +1157,13 @@ async function init() {
 
     const config = await window.api.getConfig();
     state.rootPath = config.rootPath;
-    loadProjects();
+    await loadProjects();
+    const firstFavorite = getFirstFavoriteProject();
+    if (firstFavorite) {
+        await selectProject(firstFavorite);
+    } else {
+        renderView('selection');
+    }
 }
 
 window.api.onTerminalData(({ ptyId, data }) => {

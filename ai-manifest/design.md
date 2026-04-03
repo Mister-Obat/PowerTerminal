@@ -24,6 +24,8 @@ Le design doit évoquer la puissance et la clarté.
 - **Structure** : Émoji, Nom, Preview de la commande et barre d'actions.
 - **Actions** : Boutons "Coup de poing" (🗑️, ✏️, 🚀) centrés et toujours visibles sous la preview.
 - **Drag & Drop** : Feedback visuel (opacité, scale) lors du déplacement organique.
+- **Responsive Grid** : grille adaptative basée sur la largeur réelle de la zone commandes (pas la fenêtre globale), en `1` colonne (étroit), puis `2`, `3`, et `4` colonnes quand l'espace horizontal augmente.
+- **Taille cible** : largeur visuelle optimale autour de `230px` par case (autorisé au-dessus, jamais en dessous).
 
 ### Emoji Picker
 - **UI** : Grille de 80 émojis tech/dev dans un conteneur flottant glassmorphism et défilable.
@@ -32,15 +34,24 @@ Le design doit évoquer la puissance et la clarté.
 ### Terminal Section
 - **Tabs Bar** : Barre d'onglets compacte avec bouton "+" et "－".
 - **Compaction** : Réduction adaptive de la largeur des onglets avec troncature du texte (`ellipsis`).
+- **Sidebar Apps** : bouton `+` (ajouter commande) positionné en bas, séparé visuellement de la liste des apps et toujours visible.
+- **Scroll Apps** : si la liste d'apps est longue, seule la liste défile au-dessus du bloc du bouton `+`.
 
 ### Port Monitor Page
-- **Entrée** : bouton icône "ports/processus" dans la sidebar dashboard, positionné au-dessus du bouton `+`.
-- **Liste** : tableau glassmorphism affichant `PORT`, `PROCESS`, `PID`, `PROGRAM`, `FRAMEWORK`, `STATUS`, `ACTION`.
+- **Entrée** : bouton "Ports actifs" dans la barre de navigation globale en haut de l'application.
+- **Liste** : tableau glassmorphism affichant `PORT`, `PROCESS`, `PID`, `PROGRAM`, `FRAMEWORK`, `ACTION`.
+- **Entêtes fixes** : la ligne d'entête du tableau reste visible pendant le scroll vertical.
 - **Chargement** : spinner visible dans la zone tableau pendant le fetch.
 - **Redimensionnement** : chaque colonne est redimensionnable indépendamment par poignée de drag sur l'entête.
+- **Resize stable** : drag des colonnes borné (min/max) et sans saut brutal de largeur.
 - **Guides de resize** : séparateurs verticaux visibles en permanence sur les entêtes.
 - **Action principale** : bouton `Kill` rouge à droite de chaque ligne, visible en permanence.
 - **Feedback** : message d'état en haut de page (succès/erreur) après tentative kill.
+
+### Navigation Globale
+- **Position** : barre commune en haut, visible sur toutes les pages.
+- **Contenu** : `Terminaux`, `Espace projets`, `Ports actifs`.
+- **Action secondaire** : bouton `Faire un don` aligné tout à droite de cette barre.
 
 ## 3. Animations & Transitions
 - **Page Change** : Slide-fade entre le sélecteur et le dashboard.

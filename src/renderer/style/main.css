@@ -66,6 +66,73 @@ html, body {
     align-items: stretch;
 }
 
+.top-nav {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0 1rem;
+    border-bottom: 1px solid var(--glass-border);
+    background: rgba(10, 10, 12, 0.92);
+    backdrop-filter: blur(12px);
+    z-index: 20;
+    -webkit-app-region: drag;
+}
+
+.top-nav-left {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.top-nav button {
+    -webkit-app-region: no-drag;
+}
+
+.top-nav-drag-area {
+    flex: 1 1 auto;
+    align-self: stretch;
+    -webkit-app-region: drag;
+}
+
+.top-nav-btn {
+    border: 1px solid var(--glass-border);
+    background: var(--glass);
+    color: var(--text-dim);
+    border-radius: 0.6rem;
+    padding: 0.45rem 0.85rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    font-family: inherit;
+    transition: 0.2s;
+}
+
+.top-nav-btn:hover {
+    border-color: var(--primary);
+    color: #fff;
+    background: rgba(99, 102, 241, 0.12);
+}
+
+.top-nav-btn.active {
+    border-color: rgba(99, 102, 241, 0.7);
+    color: #fff;
+    background: rgba(99, 102, 241, 0.2);
+}
+
+.top-nav-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    border-color: var(--glass-border);
+    color: var(--text-dim);
+    background: var(--glass);
+}
+
 /* Custom Titlebar */
 .titlebar {
     height: 32px;
@@ -79,6 +146,7 @@ html, body {
     right: 0;
     z-index: 9999;
     border-bottom: 1px solid var(--glass-border);
+    -webkit-app-region: drag;
 }
 
 .drag-handle {
@@ -100,6 +168,7 @@ html, body {
 
 .window-controls {
     display: flex;
+    -webkit-app-region: no-drag;
 }
 
 .win-btn {
@@ -126,10 +195,10 @@ html, body {
 
 .view {
     position: absolute;
-    top: 0;
+    top: 56px;
     left: 0;
     width: 100%;
-    height: 100%;
+    height: calc(100% - 56px);
     padding: 2rem;
     display: flex;
     flex-direction: column;
@@ -146,10 +215,17 @@ html, body {
     position: relative;
 }
 
+#selection-view header h1 {
+    font-size: 1.4rem;
+    margin-bottom: 0.2rem;
+}
+
+#selection-view header p {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+}
+
 .btn-donate {
-    position: absolute;
-    top: 0;
-    right: 0;
     display: flex;
     align-items: center;
     gap: 0.4rem;
@@ -165,6 +241,7 @@ html, body {
     cursor: pointer;
     transition: 0.2s;
     white-space: nowrap;
+    margin-left: 0;
 }
 
 .btn-donate:hover {
@@ -391,7 +468,7 @@ html, body {
     border-right: none;
     border-bottom: 1px solid var(--glass-border);
     padding: 0 0.75rem;
-    overflow: visible;
+    overflow: hidden;
     align-items: center;
     flex-shrink: 0;
     gap: 0.5rem;
@@ -399,22 +476,24 @@ html, body {
     z-index: 10;
 }
 
-#dashboard-view.vertical .col-left .sidebar-footer {
-    margin-top: 0;
-    margin-left: 0;
-    padding-top: 0;
-    border-top: none;
-    padding-bottom: 0;
+#dashboard-view.vertical .col-left .sidebar-actions-fixed {
     flex-shrink: 0;
     width: auto;
 }
 
-#dashboard-view.vertical .col-left .btn-back,
-#dashboard-view.vertical .col-left .btn-add-cmd,
-#dashboard-view.vertical .col-left .btn-side-action {
+#dashboard-view.vertical .col-left .btn-add-cmd {
     width: 46px;
     height: 46px;
     font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+#dashboard-view.vertical .col-left .sidebar-separator {
+    width: 1px;
+    height: 44px;
+    border-top: none;
+    border-left: 1px solid var(--glass-border);
+    margin: 0;
     flex-shrink: 0;
 }
 
@@ -469,31 +548,30 @@ html, body {
     border-right: 1px solid var(--glass-border);
     display: flex;
     flex-direction: column;
-    padding: 1rem 0.5rem;
-    gap: 0.75rem;
+    padding: 0;
+    gap: 0;
     align-items: center;
     height: 100%;
-    overflow-y: auto;
+    overflow: hidden;
     width: 68px;
     flex-shrink: 0;
 }
 
-.btn-back {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: var(--glass);
-    border: none;
-    color: var(--text-main);
-    cursor: pointer;
-    font-size: 1.1rem;
+.sidebar-actions-fixed {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: 0.2s;
+    width: 100%;
+    padding: 4px;
     flex-shrink: 0;
 }
-.btn-back:hover { background: rgba(255,255,255,0.12); color: #fff; transform: scale(1.08); }
+
+.sidebar-separator {
+    width: 100%;
+    border-top: 1px solid var(--glass-border);
+    margin: 0;
+    flex-shrink: 0;
+}
 
 .logo-container {
     width: 44px;
@@ -530,6 +608,20 @@ html, body {
     gap: 0.5rem;
     align-items: center;
     width: 100%;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.55rem 0 0;
+    margin: 0;
+}
+
+.sidebar-favorites::before,
+.sidebar-favorites::after {
+    content: '';
+    display: block;
+    width: 100%;
+    flex: 0 0 0;
 }
 
 .sidebar-fav-item {
@@ -572,46 +664,20 @@ html, body {
     pointer-events: none;
 }
 
-.sidebar-footer {
-    margin-top: auto;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.55rem;
-    justify-content: center;
-    width: 100%;
-    padding-bottom: 0.5rem;
-    flex-shrink: 0;
-}
-
-.btn-add-cmd,
-.btn-side-action {
+.btn-add-cmd {
     width: 44px;
     height: 44px;
     border-radius: 50%;
-    background: var(--glass);
-    border: 1px solid var(--glass-border);
+    background: var(--primary);
+    border: none;
     color: var(--text-main);
-    font-size: 1.1rem;
+    font-size: 1.5rem;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: 0.2s;
     line-height: 1;
-}
-
-.btn-add-cmd {
-    background: var(--primary);
-    border: none;
-    font-size: 1.5rem;
-}
-
-.btn-side-action:hover {
-    background: rgba(255,255,255,0.12);
-    color: #fff;
-    border-color: var(--primary);
-    transform: scale(1.08);
 }
 
 .btn-add-cmd:hover {
@@ -644,6 +710,8 @@ html, body {
     min-width: 0;
     flex: 4 1 0;
     overflow: hidden;
+    container-type: inline-size;
+    container-name: command-zone;
 }
 
 .column-header {
@@ -676,14 +744,32 @@ html, body {
 
 #command-grid {
     display: grid !important;
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 1.5rem;
+    grid-template-columns: repeat(1, minmax(230px, 1fr)) !important;
+    gap: 1rem;
     overflow-y: auto;
     flex: 1;
     min-height: 0;
     width: 100%;
-    padding: 2rem;
+    padding: 1rem;
     align-content: start;
+}
+
+@container command-zone (min-width: 508px) {
+    #command-grid {
+        grid-template-columns: repeat(2, minmax(230px, 1fr)) !important;
+    }
+}
+
+@container command-zone (min-width: 754px) {
+    #command-grid {
+        grid-template-columns: repeat(3, minmax(230px, 1fr)) !important;
+    }
+}
+
+@container command-zone (min-width: 1000px) {
+    #command-grid {
+        grid-template-columns: repeat(4, minmax(230px, 1fr)) !important;
+    }
 }
 
 .cmd-card-fancy {
@@ -1037,6 +1123,8 @@ html, body {
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
+    width: 100%;
+    flex: 0 0 auto;
 }
 
 .ports-header-left {
@@ -1063,6 +1151,7 @@ html, body {
     background: var(--glass);
     color: var(--text-main);
     font-size: 0.9rem;
+    flex: 0 0 auto;
 }
 
 .ports-feedback.success {
@@ -1079,21 +1168,49 @@ html, body {
     margin-top: 1rem;
     border: 1px solid var(--glass-border);
     border-radius: 0.8rem;
-    overflow: auto;
+    overflow: hidden;
     background: var(--glass);
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.ports-table-head-wrap {
+    flex: 0 0 auto;
+    overflow: hidden;
+    overflow-y: hidden;
+    background: #12131a;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ports-table-head-wrap::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+}
+
+.ports-table-scroll {
+    width: 100%;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: auto;
+    border-radius: 0 0 0.8rem 0.8rem;
+    background: transparent;
 }
 
 .ports-table {
-    width: 100%;
-    border-collapse: collapse;
+    width: max-content;
     min-width: 980px;
+    border-collapse: collapse;
     table-layout: fixed;
 }
 
 #ports-col-port { width: 82px; }
-#ports-col-pid { width: 88px; }
-#ports-col-status { width: 110px; }
-#ports-col-action { width: 110px; }
+#ports-col-process { width: 130px; }
+#ports-col-pid { width: 64px; }
+#ports-col-program { width: 240px; }
+#ports-col-framework { width: 110px; }
+#ports-col-action { width: 74px; }
 
 .ports-table th,
 .ports-table td {
@@ -1110,6 +1227,14 @@ html, body {
     letter-spacing: 0.06em;
     font-size: 0.72rem;
     user-select: none;
+    background: #12131a;
+    backdrop-filter: blur(6px);
+}
+
+#ports-view {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .ports-table td.process-cell,
@@ -1118,6 +1243,16 @@ html, body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.ports-table td:first-child {
+    overflow: visible;
+    text-overflow: clip;
+}
+
+.ports-table td:last-child {
+    overflow: visible;
+    text-overflow: clip;
 }
 
 .ports-table td.process-cell,
@@ -1153,28 +1288,6 @@ html, body {
 
 .col-resize-handle:hover::before {
     background: rgba(99, 102, 241, 0.9);
-}
-
-.port-status {
-    display: inline-block;
-    border-radius: 999px;
-    padding: 0.2rem 0.55rem;
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-}
-
-.port-status.status-healthy {
-    color: #86efac;
-    border: 1px solid rgba(16, 185, 129, 0.45);
-    background: rgba(16, 185, 129, 0.16);
-}
-
-.port-status.status-unknown {
-    color: #cbd5e1;
-    border: 1px solid rgba(148, 163, 184, 0.35);
-    background: rgba(148, 163, 184, 0.12);
 }
 
 .port-tag {

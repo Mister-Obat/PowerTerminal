@@ -6,30 +6,31 @@ PowerTerminal est une app desktop Windows pour lancer rapidement des commandes p
 
 ## Aperçu
 
-| Projets | Dashboard |
-|---------|-----------|
-| ![Projets](assets/screenshots/selection.png) | ![Dashboard](assets/screenshots/dashboard.png) |
+| Dashboard | Ports actifs |
+|-----------|--------------|
+| ![Dashboard](assets/screenshots/1.png) | ![Ports actifs](assets/screenshots/2.png) |
 
-## Ce que fait l'app
+## Utilité et utilisation
 
-- Ajout manuel de projets via sélecteur de dossier
-- Commandes personnalisées par projet (`emoji`, `label`, `command`)
-- Terminal intégré avec multi-onglets
-- Indicateur d'activité (`running`) basé sur les vrais processus en cours
-- Vue **Ports actifs** (inspirée de Port Whisperer) avec kill de processus en 1 clic
-- Persistance locale dans `config.json`
+PowerTerminal sert à piloter rapidement tes projets en local: lancer des commandes, gérer plusieurs terminaux et nettoyer les processus qui bloquent des ports.
 
-## Vue Ports Actifs
+### Terminaux (zone principale)
 
-Depuis le dashboard, le bouton icône "ports/processus" ouvre une page dédiée qui affiche les ports TCP actifs.
+- La colonne de gauche affiche les apps/projets favoris.
+- Le bouton `+` en bas à gauche sert à créer des commandes rapides.
+- La zone de droite sert à gérer les terminaux de commande (multi-onglets).
 
-Fonctionnalités:
+### Espace projets
 
-- Colonnes: `PORT`, `PROCESSUS`, `PID`, `PROGRAMME`, `FRAMEWORK`, `STATUS`, `ACTION`
-- Bouton `Kill` par ligne pour stopper le process immédiatement
-- Loader visible pendant le chargement des ports
-- Colonnes redimensionnables indépendamment (drag sur séparateurs visibles)
-- Filtrage des ports système/bruit (incluant la plage dynamique `49152-65535`)
+- Tu définis les dossiers racine des projets qui doivent apparaître dans `Terminaux`.
+- Tu peux personnaliser le logo de chaque projet.
+- Tu peux mettre un projet en favori pour l’avoir directement affiché dans l’espace `Terminaux` au démarrage de l’app.
+
+### Ports actifs
+
+- La page `Ports actifs` permet de voir facilement ce qui tourne sur le PC.
+- Tu peux tuer un processus en un clic (`Kill`) pour libérer un port rapidement.
+- Les colonnes disponibles: `PORT`, `PROCESSUS`, `PID`, `PROGRAMME`, `FRAMEWORK`, `ACTION`.
 
 ## Stack
 

@@ -16,12 +16,20 @@
         </div>
     </div>
     <div id="app">
+        <nav id="top-nav" class="top-nav" aria-label="Navigation principale">
+            <div class="top-nav-left">
+                <button id="nav-workspace-btn" class="top-nav-btn" type="button">Terminaux</button>
+                <button id="nav-projects-btn" class="top-nav-btn" type="button">Espace projets</button>
+                <button id="nav-ports-btn" class="top-nav-btn" type="button">Ports actifs</button>
+            </div>
+            <div class="top-nav-drag-area" aria-hidden="true"></div>
+            <button id="donate-btn" class="btn-donate" type="button">♥ Faire un don</button>
+        </nav>
         <!-- Selection View -->
         <section id="selection-view" class="view">
             <header>
                 <h1>PowerTerminal</h1>
                 <p>Ouvrez un projet pour commencer</p>
-                <button id="donate-btn" class="btn-donate">♥ Faire un don</button>
             </header>
             <div id="favorites-list" class="project-list favorites">
                 <!-- Favorites go here -->
@@ -102,25 +110,9 @@
         <section id="dashboard-view" class="view hidden">
             <!-- Col 1: Project Identity & Nav -->
             <aside class="col-left">
-                <button id="back-to-selection" class="btn-back" title="Retour à la sélection">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M19 12H5M12 5l-7 7 7 7"/>
-                    </svg>
-                </button>
-
                 <div id="sidebar-favorites" class="sidebar-favorites"></div>
-
-                <div class="sidebar-footer">
-                    <button id="open-ports-view" class="btn-side-action" title="Ports actifs">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="4" y="4" width="16" height="4" rx="1.5"></rect>
-                            <rect x="4" y="10" width="16" height="4" rx="1.5"></rect>
-                            <rect x="4" y="16" width="16" height="4" rx="1.5"></rect>
-                            <circle cx="8" cy="6" r="0.8" fill="currentColor"></circle>
-                            <circle cx="8" cy="12" r="0.8" fill="currentColor"></circle>
-                            <circle cx="8" cy="18" r="0.8" fill="currentColor"></circle>
-                        </svg>
-                    </button>
+                <div class="sidebar-separator" aria-hidden="true"></div>
+                <div class="sidebar-actions-fixed">
                     <button id="add-custom-command" class="btn-add-cmd" title="Ajouter une commande">+</button>
                 </div>
             </aside>
@@ -159,11 +151,6 @@
         <section id="ports-view" class="view hidden">
             <div class="ports-header">
                 <div class="ports-header-left">
-                    <button id="ports-back-btn" class="btn-back" title="Retour au dashboard">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M19 12H5M12 5l-7 7 7 7"/>
-                        </svg>
-                    </button>
                     <div>
                         <h2>Ports actifs</h2>
                         <p>Liste runtime des ports en écoute et kill en un clic.</p>
@@ -173,29 +160,41 @@
             </div>
             <div id="ports-feedback" class="ports-feedback hidden"></div>
             <div class="ports-table-wrap">
-                <table class="ports-table">
-                    <colgroup>
-                        <col id="ports-col-port" />
-                        <col id="ports-col-process" />
-                        <col id="ports-col-pid" />
-                        <col id="ports-col-program" />
-                        <col id="ports-col-framework" />
-                        <col id="ports-col-status" />
-                        <col id="ports-col-action" />
-                    </colgroup>
-                    <thead>
-                        <tr>
-                            <th>Port</th>
-                            <th>Processus</th>
-                            <th>PID</th>
-                            <th>Programme</th>
-                            <th>Framework</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="ports-list-body"></tbody>
-                </table>
+                <div id="ports-table-head-wrap" class="ports-table-head-wrap">
+                    <table class="ports-table ports-table-head">
+                        <colgroup>
+                            <col id="ports-col-port" />
+                            <col id="ports-col-process" />
+                            <col id="ports-col-pid" />
+                            <col id="ports-col-program" />
+                            <col id="ports-col-framework" />
+                            <col id="ports-col-action" />
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>Port</th>
+                                <th>Processus</th>
+                                <th>PID</th>
+                                <th>Programme</th>
+                                <th>Framework</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                    </table>
+                </div>
+                <div id="ports-table-scroll" class="ports-table-scroll">
+                    <table class="ports-table ports-table-body">
+                        <colgroup>
+                            <col />
+                            <col />
+                            <col />
+                            <col />
+                            <col />
+                            <col />
+                        </colgroup>
+                        <tbody id="ports-list-body"></tbody>
+                    </table>
+                </div>
             </div>
         </section>
     </div>

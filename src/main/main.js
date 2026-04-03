@@ -163,9 +163,10 @@ function ensureTerminalStatusMonitor() {
 
 function runPowerShellJson(script, timeout = 7000) {
   return new Promise((resolve, reject) => {
+    const encodedScript = Buffer.from(String(script || ''), 'utf16le').toString('base64');
     execFile(
       'powershell.exe',
-      ['-NoProfile', '-Command', script],
+      ['-NoProfile', '-EncodedCommand', encodedScript],
       { windowsHide: true, timeout, maxBuffer: 2 * 1024 * 1024 },
       (error, stdout, stderr) => {
         if (error) {
@@ -191,25 +192,103 @@ function runPowerShellJson(script, timeout = 7000) {
   });
 }
 
-function detectFrameworkFromCommand(command = '', processName = '') {
+function runCommand(file, args, timeout = 10000) {
+  return new Promise((resolve, reject) => {
+    execFile(
+      file,
+      args,
+      { windowsHide: true, timeout, maxBuffer: 4 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) {
+          const details = String(stderr || '').trim();
+          reject(new Error(details ? `${error.message}\n${details}` : error.message));
+          return;
+        }
+        resolve(String(stdout || ''));
+      }
+    );
+  });
+}
+
+function parseTasklistCsvLine(line) {
+  const values = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (ch === ',' && !inQuotes) {
+      values.push(current);
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  values.push(current);
+  return values;
+}
+
+function normalizeListenState(value) {
+  return String(value || '')
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '');
+}
+
+function parseNetstatLocalAddress(local) {
+  const input = String(local || '').trim();
+  if (!input) return { address: '', port: 0 };
+
+  if (input.startsWith('[')) {
+    const closing = input.lastIndexOf(']');
+    const address = closing > 0 ? input.slice(1, closing) : input;
+    const portPart = closing > -1 ? input.slice(closing + 1) : '';
+    const port = Number(portPart.replace(/^:/, '')) || 0;
+    return { address, port };
+  }
+
+  const match = input.match(/^(.*):(\d+)$/);
+  if (!match) return { address: input, port: 0 };
+  return { address: match[1], port: Number(match[2]) || 0 };
+}
+
+function detectFrameworkFromCommand(command = '', processName = '', executablePath = '', program = '') {
   const cmd = String(command).toLowerCase();
   const name = String(processName).toLowerCase();
+  const exe = String(executablePath).toLowerCase();
+  const prog = String(program).toLowerCase();
+  const full = `${cmd} ${name} ${exe} ${prog}`;
 
-  if (cmd.includes('next')) return 'Next.js';
-  if (cmd.includes('vite')) return 'Vite';
-  if (cmd.includes('nuxt')) return 'Nuxt';
-  if (cmd.includes('angular') || cmd.includes('ng serve')) return 'Angular';
-  if (cmd.includes('webpack')) return 'Webpack';
-  if (cmd.includes('remix')) return 'Remix';
-  if (cmd.includes('astro')) return 'Astro';
-  if (cmd.includes('gatsby')) return 'Gatsby';
-  if (cmd.includes('flask')) return 'Flask';
-  if (cmd.includes('django') || cmd.includes('manage.py')) return 'Django';
-  if (cmd.includes('uvicorn')) return 'FastAPI';
-  if (cmd.includes('rails')) return 'Rails';
-  if (cmd.includes('cargo') || cmd.includes('rustc')) return 'Rust';
-  if (cmd.includes('node')) return 'Node.js';
-  if (cmd.includes('python')) return 'Python';
+  if (full.includes('codex')) return 'Codex';
+  if (full.includes('next')) return 'Next.js';
+  if (full.includes('vite')) return 'Vite';
+  if (full.includes('nuxt')) return 'Nuxt';
+  if (full.includes('angular') || full.includes('ng serve')) return 'Angular';
+  if (full.includes('webpack')) return 'Webpack';
+  if (full.includes('remix')) return 'Remix';
+  if (full.includes('astro')) return 'Astro';
+  if (full.includes('gatsby')) return 'Gatsby';
+  if (full.includes('flask')) return 'Flask';
+  if (full.includes('django') || full.includes('manage.py')) return 'Django';
+  if (full.includes('uvicorn') || full.includes('fastapi')) return 'FastAPI';
+  if (full.includes('rails')) return 'Rails';
+  if (full.includes('cargo') || full.includes('rustc')) return 'Rust';
+  if (full.includes('go.exe') || full.includes('\\go\\')) return 'Go';
+  if (full.includes('dotnet') || full.includes('aspnet')) return '.NET';
+  if (full.includes('php')) return 'PHP';
+  if (full.includes('bun')) return 'Bun';
+  if (full.includes('deno')) return 'Deno';
+  if (full.includes('node')) return 'Node.js';
+  if (full.includes('python')) return 'Python';
   if (name === 'node.exe' || name === 'node') return 'Node.js';
   if (name === 'python.exe' || name === 'python' || name === 'python3') return 'Python';
   if (name === 'java.exe' || name === 'java') return 'Java';
@@ -375,85 +454,123 @@ ipcMain.handle('ports:list', async () => {
     return [];
   }
 
-  const script = `
-$ports = Get-NetTCPConnection -State Listen |
-    Where-Object { $_.OwningProcess -gt 0 } |
-    Select-Object -Property LocalAddress,LocalPort,OwningProcess -Unique
+  const netstatRaw = await runCommand('netstat.exe', ['-ano', '-p', 'tcp'], 12000);
+  const listenStates = new Set(['LISTENING', 'ECOUTE']);
+  const establishedStates = new Set(['ESTABLISHED', 'ETABLI']);
+  const dedupe = new Set();
+  const rows = [];
 
-if (-not $ports) {
-    "[]"
-    exit
+  String(netstatRaw || '').split(/\r?\n/).forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed || !trimmed.toUpperCase().startsWith('TCP')) return;
+
+    const parts = trimmed.split(/\s+/);
+    if (parts.length < 5) return;
+    const local = parts[1];
+    const state = normalizeListenState(parts[3]);
+    const pid = Number(parts[4]) || 0;
+    const isListeningState = listenStates.has(state);
+    const isEstablishedState = establishedStates.has(state);
+    if ((!isListeningState && !isEstablishedState) || pid <= 0) return;
+
+    const { address, port } = parseNetstatLocalAddress(local);
+    if (port <= 0) return;
+
+    const key = `${address}|${port}|${pid}`;
+    if (dedupe.has(key)) return;
+    dedupe.add(key);
+
+    rows.push({
+      localAddress: address,
+      port,
+      pid,
+      state: isListeningState ? 'listening' : 'established',
+      processName: '',
+      command: '',
+      executablePath: '',
+      tasklistRaw: '',
+      tasklistSummary: '',
+    });
+  });
+
+  const pids = [...new Set(rows.map((r) => r.pid))];
+  const pidInfo = new Map();
+  const pidMeta = new Map();
+
+  if (pids.length) {
+    const psScript = `
+$pidList = @(${pids.join(',')})
+$filter = ($pidList | ForEach-Object { "ProcessId=$_" }) -join " OR "
+$meta = @()
+if ($filter) {
+  $meta = Get-CimInstance Win32_Process -Filter $filter -ErrorAction SilentlyContinue |
+    Select-Object @{Name='pid';Expression={[int]$_.ProcessId}}, Name, CommandLine, ExecutablePath
 }
-
-$pids = $ports | Select-Object -ExpandProperty OwningProcess -Unique
-$procMap = @{}
-$taskMap = @{}
-foreach ($procId in $pids) {
-    try {
-        $p = Get-CimInstance Win32_Process -Filter "ProcessId=$procId"
-        if ($p) {
-            $procMap[$procId] = [PSCustomObject]@{
-                Name = $p.Name
-                CommandLine = $p.CommandLine
-                ExecutablePath = $p.ExecutablePath
-            }
-        }
-    } catch {}
-
-    try {
-        $taskRaw = tasklist /FI "PID eq $procId" /FO CSV /NH 2>$null
-        if ($taskRaw -and ($taskRaw -notmatch "^INFO")) {
-            $task = ConvertFrom-Csv -InputObject $taskRaw -Header ImageName,ProcessId,SessionName,SessionNumber,MemUsage
-            if ($task) {
-                $taskMap[$procId] = [PSCustomObject]@{
-                    Raw = $taskRaw
-                    Summary = ("{0} | {1} | {2}" -f $task.ImageName, $task.MemUsage, $task.SessionName)
-                }
-            }
-        }
-    } catch {}
-}
-
-$rows = foreach ($entry in $ports) {
-    $meta = $procMap[$entry.OwningProcess]
-    $task = $taskMap[$entry.OwningProcess]
-    [PSCustomObject]@{
-        localAddress = $entry.LocalAddress
-        port = $entry.LocalPort
-        pid = $entry.OwningProcess
-        processName = if ($meta) { $meta.Name } else { $null }
-        command = if ($meta) { $meta.CommandLine } else { $null }
-        executablePath = if ($meta) { $meta.ExecutablePath } else { $null }
-        tasklistRaw = if ($task) { $task.Raw } else { $null }
-        tasklistSummary = if ($task) { $task.Summary } else { $null }
-    }
-}
-
-$rows | Sort-Object -Property port, pid | ConvertTo-Json -Compress
+@($meta) | ConvertTo-Json -Compress
 `;
 
-  const rows = await runPowerShellJson(script, 10000);
+    const [metaRowsResult, tasklistRawResult] = await Promise.allSettled([
+      runPowerShellJson(psScript, 8000),
+      runCommand('tasklist.exe', ['/FO', 'CSV', '/NH'], 8000),
+    ]);
+
+    if (metaRowsResult.status === 'fulfilled') {
+      metaRowsResult.value.forEach((entry) => {
+        const pid = Number(entry?.pid) || 0;
+        const name = String(entry?.name || entry?.Name || '');
+        const commandLine = String(entry?.commandLine || entry?.CommandLine || '');
+        const executablePath = String(entry?.executablePath || entry?.ExecutablePath || '');
+        if (pid > 0) {
+          pidMeta.set(pid, { name, commandLine, executablePath });
+        }
+      });
+    }
+
+    if (tasklistRawResult.status === 'fulfilled') {
+      const pidSet = new Set(pids);
+      String(tasklistRawResult.value || '').split(/\r?\n/).forEach((rawLine) => {
+        const line = rawLine.trim();
+        if (!line || /^INFO:/i.test(line)) return;
+        const [imageName, processId, sessionName, sessionNumber, memUsage] = parseTasklistCsvLine(line);
+        const pid = Number(processId) || 0;
+        if (!pidSet.has(pid)) return;
+        const summary = `${imageName || 'Unknown'} | ${memUsage || '—'} | ${sessionName || '—'}`;
+        pidInfo.set(pid, {
+          processName: String(imageName || '').replace(/\.exe$/i, ''),
+          tasklistRaw: line,
+          tasklistSummary: summary,
+          program: imageName || 'Unknown',
+        });
+        void sessionNumber;
+      });
+    }
+  }
+
   const isIgnoredPort = (port) => {
-    if (IGNORED_PORTS.has(port)) return true;
-    return port >= DYNAMIC_PORTS_MIN && port <= DYNAMIC_PORTS_MAX;
+    return IGNORED_PORTS.has(port);
   };
 
+  const isDynamicPort = (port) => port >= DYNAMIC_PORTS_MIN && port <= DYNAMIC_PORTS_MAX;
+
   return rows.map((entry) => {
-    const processName = String(entry.processName || '');
-    const command = String(entry.command || '');
-    const executablePath = String(entry.executablePath || '');
-    const tasklistRaw = String(entry.tasklistRaw || '');
-    const tasklistSummary = String(entry.tasklistSummary || '');
+    const enriched = pidInfo.get(entry.pid) || {};
+    const meta = pidMeta.get(entry.pid) || {};
+    const executablePath = String(meta.executablePath || entry.executablePath || '');
+    const processName = String(meta.name || enriched.processName || entry.processName || '');
+    const command = String(meta.commandLine || entry.command || '');
+    const tasklistRaw = String(enriched.tasklistRaw || entry.tasklistRaw || '');
+    const tasklistSummary = String(enriched.tasklistSummary || entry.tasklistSummary || '');
     const taskImage = tasklistSummary ? String(tasklistSummary).split('|')[0].trim() : '';
     const resolvedProcessName = processName || taskImage;
-    const resolvedProgram = executablePath || taskImage || processName || 'Unknown';
-    const framework = detectFrameworkFromCommand(command, resolvedProcessName);
+    const resolvedProgram = executablePath || String(enriched.program || '') || taskImage || processName || 'Unknown';
+    const framework = detectFrameworkFromCommand(command, resolvedProcessName, executablePath, resolvedProgram);
     const status = resolvedProcessName || tasklistRaw ? 'healthy' : 'unknown';
 
     return {
       localAddress: String(entry.localAddress || ''),
       port: Number(entry.port) || 0,
       pid: Number(entry.pid) || 0,
+      state: String(entry.state || 'listening'),
       processName: resolvedProcessName || 'Unknown',
       command,
       program: resolvedProgram,
@@ -461,7 +578,24 @@ $rows | Sort-Object -Property port, pid | ConvertTo-Json -Compress
       framework,
       status,
     };
-  }).filter((entry) => entry.port > 0 && entry.pid > 0 && !isIgnoredPort(entry.port));
+  }).filter((entry) => {
+    if (entry.port <= 0 || entry.pid <= 0) return false;
+    const loweredProcess = String(entry.processName || '').toLowerCase();
+    const loweredProgram = String(entry.program || '').toLowerCase();
+    const loweredCommand = String(entry.command || '').toLowerCase();
+    const isCodex = loweredProcess.includes('codex')
+      || loweredProgram.includes('codex')
+      || loweredCommand.includes('codex');
+
+    if (entry.state !== 'listening') {
+      return isCodex;
+    }
+
+    if (isCodex) return true;
+    if (isIgnoredPort(entry.port)) return false;
+    if (isDynamicPort(entry.port)) return false;
+    return true;
+  });
 });
 
 ipcMain.handle('ports:kill-process', async (event, { pid }) => {

@@ -25,8 +25,8 @@
 5. La commande est immédiatement sauvegardée et prête à être lancée ou réorganisée.
 
 ## Flow 4 : Monitoring des Ports Actifs
-1. L'utilisateur est sur le dashboard projet (écran raccourcis).
-2. Il clique sur le bouton "Ports/Processus" placé au-dessus du bouton `+`.
+1. L'utilisateur est sur l'app (n'importe quelle page principale).
+2. Il clique sur `Ports actifs` dans la barre de navigation du haut.
 3. L'app ouvre une page dédiée listant les ports actifs.
 4. L'utilisateur clique `Kill` sur une ligne pour arrêter le processus lié.
 5. La liste est rafraîchie automatiquement et l'état affiché reste aligné au runtime.
