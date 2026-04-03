@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, Menu, dialog, protocol, net, clipboard, sh
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import fs from 'fs/promises';
+import { accessSync } from 'fs';
 import os from 'os';
 import { execFile } from 'child_process';
 import { createRequire } from 'module';
@@ -21,6 +22,9 @@ const terminals = new Map();
 const terminalRunningStates = new Map();
 let terminalStatusInterval = null;
 const TERMINAL_STATUS_INTERVAL_MS = 1200;
+const IGNORED_PORTS = new Set([135, 139, 445, 5040, 5354, 5355, 5357, 5358, 5985, 7680, 47001]);
+const DYNAMIC_PORTS_MIN = 49152;
+const DYNAMIC_PORTS_MAX = 65535;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -187,6 +191,34 @@ function runPowerShellJson(script, timeout = 7000) {
   });
 }
 
+function detectFrameworkFromCommand(command = '', processName = '') {
+  const cmd = String(command).toLowerCase();
+  const name = String(processName).toLowerCase();
+
+  if (cmd.includes('next')) return 'Next.js';
+  if (cmd.includes('vite')) return 'Vite';
+  if (cmd.includes('nuxt')) return 'Nuxt';
+  if (cmd.includes('angular') || cmd.includes('ng serve')) return 'Angular';
+  if (cmd.includes('webpack')) return 'Webpack';
+  if (cmd.includes('remix')) return 'Remix';
+  if (cmd.includes('astro')) return 'Astro';
+  if (cmd.includes('gatsby')) return 'Gatsby';
+  if (cmd.includes('flask')) return 'Flask';
+  if (cmd.includes('django') || cmd.includes('manage.py')) return 'Django';
+  if (cmd.includes('uvicorn')) return 'FastAPI';
+  if (cmd.includes('rails')) return 'Rails';
+  if (cmd.includes('cargo') || cmd.includes('rustc')) return 'Rust';
+  if (cmd.includes('node')) return 'Node.js';
+  if (cmd.includes('python')) return 'Python';
+  if (name === 'node.exe' || name === 'node') return 'Node.js';
+  if (name === 'python.exe' || name === 'python' || name === 'python3') return 'Python';
+  if (name === 'java.exe' || name === 'java') return 'Java';
+  if (name === 'ruby.exe' || name === 'ruby') return 'Ruby';
+  if (name === 'go.exe' || name === 'go') return 'Go';
+
+  return 'Unknown';
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -209,6 +241,9 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    console.error('[Main] did-fail-load:', { errorCode, errorDescription, validatedURL });
+  });
 
   // Ensure all terminals are killed when window is destroyed
   mainWindow.on('closed', () => {
@@ -225,7 +260,26 @@ function createWindow() {
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    const appPath = app.getAppPath();
+    const candidatePaths = [
+      path.join(appPath, 'dist/index.html'),
+      path.join(__dirname, '../../dist/index.html'),
+      path.join(__dirname, '../dist/index.html')
+    ];
+    const indexPath = candidatePaths.find((candidate) => {
+      try {
+        accessSync(candidate);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+
+    if (!indexPath) {
+      throw new Error(`Impossible de trouver index.html. Tried: ${candidatePaths.join(', ')}`);
+    }
+
+    mainWindow.loadFile(indexPath);
   }
 }
 
@@ -333,13 +387,28 @@ if (-not $ports) {
 
 $pids = $ports | Select-Object -ExpandProperty OwningProcess -Unique
 $procMap = @{}
-foreach ($pid in $pids) {
+$taskMap = @{}
+foreach ($procId in $pids) {
     try {
-        $p = Get-CimInstance Win32_Process -Filter "ProcessId=$pid"
+        $p = Get-CimInstance Win32_Process -Filter "ProcessId=$procId"
         if ($p) {
-            $procMap[$pid] = [PSCustomObject]@{
+            $procMap[$procId] = [PSCustomObject]@{
                 Name = $p.Name
                 CommandLine = $p.CommandLine
+                ExecutablePath = $p.ExecutablePath
+            }
+        }
+    } catch {}
+
+    try {
+        $taskRaw = tasklist /FI "PID eq $procId" /FO CSV /NH 2>$null
+        if ($taskRaw -and ($taskRaw -notmatch "^INFO")) {
+            $task = ConvertFrom-Csv -InputObject $taskRaw -Header ImageName,ProcessId,SessionName,SessionNumber,MemUsage
+            if ($task) {
+                $taskMap[$procId] = [PSCustomObject]@{
+                    Raw = $taskRaw
+                    Summary = ("{0} | {1} | {2}" -f $task.ImageName, $task.MemUsage, $task.SessionName)
+                }
             }
         }
     } catch {}
@@ -347,12 +416,16 @@ foreach ($pid in $pids) {
 
 $rows = foreach ($entry in $ports) {
     $meta = $procMap[$entry.OwningProcess]
+    $task = $taskMap[$entry.OwningProcess]
     [PSCustomObject]@{
         localAddress = $entry.LocalAddress
         port = $entry.LocalPort
         pid = $entry.OwningProcess
         processName = if ($meta) { $meta.Name } else { $null }
         command = if ($meta) { $meta.CommandLine } else { $null }
+        executablePath = if ($meta) { $meta.ExecutablePath } else { $null }
+        tasklistRaw = if ($task) { $task.Raw } else { $null }
+        tasklistSummary = if ($task) { $task.Summary } else { $null }
     }
 }
 
@@ -360,13 +433,35 @@ $rows | Sort-Object -Property port, pid | ConvertTo-Json -Compress
 `;
 
   const rows = await runPowerShellJson(script, 10000);
-  return rows.map((entry) => ({
-    localAddress: String(entry.localAddress || ''),
-    port: Number(entry.port) || 0,
-    pid: Number(entry.pid) || 0,
-    processName: String(entry.processName || ''),
-    command: String(entry.command || ''),
-  })).filter((entry) => entry.port > 0 && entry.pid > 0);
+  const isIgnoredPort = (port) => {
+    if (IGNORED_PORTS.has(port)) return true;
+    return port >= DYNAMIC_PORTS_MIN && port <= DYNAMIC_PORTS_MAX;
+  };
+
+  return rows.map((entry) => {
+    const processName = String(entry.processName || '');
+    const command = String(entry.command || '');
+    const executablePath = String(entry.executablePath || '');
+    const tasklistRaw = String(entry.tasklistRaw || '');
+    const tasklistSummary = String(entry.tasklistSummary || '');
+    const taskImage = tasklistSummary ? String(tasklistSummary).split('|')[0].trim() : '';
+    const resolvedProcessName = processName || taskImage;
+    const resolvedProgram = executablePath || taskImage || processName || 'Unknown';
+    const framework = detectFrameworkFromCommand(command, resolvedProcessName);
+    const status = resolvedProcessName || tasklistRaw ? 'healthy' : 'unknown';
+
+    return {
+      localAddress: String(entry.localAddress || ''),
+      port: Number(entry.port) || 0,
+      pid: Number(entry.pid) || 0,
+      processName: resolvedProcessName || 'Unknown',
+      command,
+      program: resolvedProgram,
+      tasklist: tasklistSummary || '—',
+      framework,
+      status,
+    };
+  }).filter((entry) => entry.port > 0 && entry.pid > 0 && !isIgnoredPort(entry.port));
 });
 
 ipcMain.handle('ports:kill-process', async (event, { pid }) => {

@@ -16,7 +16,20 @@ PowerTerminal est une app desktop Windows pour lancer rapidement des commandes p
 - Commandes personnalisées par projet (`emoji`, `label`, `command`)
 - Terminal intégré avec multi-onglets
 - Indicateur d'activité (`running`) basé sur les vrais processus en cours
+- Vue **Ports actifs** (inspirée de Port Whisperer) avec kill de processus en 1 clic
 - Persistance locale dans `config.json`
+
+## Vue Ports Actifs
+
+Depuis le dashboard, le bouton icône "ports/processus" ouvre une page dédiée qui affiche les ports TCP actifs.
+
+Fonctionnalités:
+
+- Colonnes: `PORT`, `PROCESSUS`, `PID`, `PROGRAMME`, `FRAMEWORK`, `STATUS`, `ACTION`
+- Bouton `Kill` par ligne pour stopper le process immédiatement
+- Loader visible pendant le chargement des ports
+- Colonnes redimensionnables indépendamment (drag sur séparateurs visibles)
+- Filtrage des ports système/bruit (incluant la plage dynamique `49152-65535`)
 
 ## Stack
 

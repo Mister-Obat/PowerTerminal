@@ -34,3 +34,6 @@ desktop.ini
 .idea/
 .gemini/
 .claude/
+
+# Dossiers perso locaux
+Admin/

@@ -61,15 +61,18 @@
 - Pas de session persistée des terminaux (tabs/logs/cwd runtime).
 - Pas de dossier `sessions/`.
 
-## 5. Port Monitor (inspiré Port Whisperer)
+## 5. Port Monitor
 
 ### Capacités
 - Depuis le dashboard, un bouton dédié ouvre une page "Ports actifs".
-- La page liste les ports TCP en écoute avec PID, process et commande.
+- La page liste les ports TCP en écoute avec colonnes enrichies: `port`, `process`, `pid`, `program`, `framework`, `status`.
+- Pendant le chargement des ports, un indicateur visuel est affiché directement dans la zone de liste.
+- Chaque colonne du tableau ports est redimensionnable indépendamment via drag sur l'entête.
 - Chaque ligne expose une action `Kill` en un clic pour stopper le processus.
 - Après kill, la liste est rafraîchie immédiatement pour refléter l'état réel.
 
 ### Contraintes
 - Les données ports/process sont collectées côté `main` via IPC, jamais directement depuis le renderer.
+- Le détail `tasklist /FI "PID eq <pid>"` est collecté côté `main` et exposé au renderer comme donnée d'affichage.
 - Le renderer ne doit afficher que l'état runtime actuel (pas de cache persistant).
 - En cas d'échec kill (droits insuffisants, PID invalide), l'UI doit afficher un message d'erreur clair.

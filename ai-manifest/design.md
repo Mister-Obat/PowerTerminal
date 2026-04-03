@@ -35,7 +35,10 @@ Le design doit évoquer la puissance et la clarté.
 
 ### Port Monitor Page
 - **Entrée** : bouton icône "ports/processus" dans la sidebar dashboard, positionné au-dessus du bouton `+`.
-- **Liste** : cartes/lignes glassmorphism affichant `port`, `pid`, `process`, `commande`.
+- **Liste** : tableau glassmorphism affichant `PORT`, `PROCESS`, `PID`, `PROGRAM`, `FRAMEWORK`, `STATUS`, `ACTION`.
+- **Chargement** : spinner visible dans la zone tableau pendant le fetch.
+- **Redimensionnement** : chaque colonne est redimensionnable indépendamment par poignée de drag sur l'entête.
+- **Guides de resize** : séparateurs verticaux visibles en permanence sur les entêtes.
 - **Action principale** : bouton `Kill` rouge à droite de chaque ligne, visible en permanence.
 - **Feedback** : message d'état en haut de page (succès/erreur) après tentative kill.
 

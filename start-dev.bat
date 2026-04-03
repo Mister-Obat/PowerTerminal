@@ -1,7 +1,8 @@
 @echo off
-set "VBS_PATH=%TEMP%\launch_powerterminal.vbs"
-echo Set WshShell = CreateObject("WScript.Shell") > "%VBS_PATH%"
-echo WshShell.Run "cmd /c npm run dev", 0, False >> "%VBS_PATH%"
-wscript.exe "%VBS_PATH%"
-del "%VBS_PATH%"
-exit
+setlocal
+set "APP_DIR=%~dp0"
+if "%APP_DIR:~-1%"=="\" set "APP_DIR=%APP_DIR:~0,-1%"
+set "PS_CMD=Start-Process cmd.exe -WindowStyle Hidden -WorkingDirectory '%APP_DIR%' -ArgumentList '/c npm run dev'"
+powershell -NoProfile -WindowStyle Hidden -Command "%PS_CMD%"
+endlocal
+exit /b 0

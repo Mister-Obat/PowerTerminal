@@ -16,7 +16,8 @@ const state = {
     deleteCallback: null,
     recentlyOpened: [], // Array of project paths opened in current session (non-favorites only)
     ports: [],
-    portsFeedback: null
+    portsFeedback: null,
+    portsLoading: false
 };
 
 const dom = {
@@ -125,11 +126,66 @@ function escapeHtml(value) {
         .replace(/'/g, '&#39;');
 }
 
+function initPortsTableResizers() {
+    const table = document.querySelector('.ports-table');
+    if (!table) return;
+
+    const headers = Array.from(table.querySelectorAll('thead th'));
+    const cols = Array.from(table.querySelectorAll('colgroup col'));
+    if (!headers.length || headers.length !== cols.length) return;
+
+    headers.forEach((th, index) => {
+        if (th.querySelector('.col-resize-handle')) return;
+
+        const handle = document.createElement('div');
+        handle.className = 'col-resize-handle';
+        th.appendChild(handle);
+
+        handle.addEventListener('mousedown', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const col = cols[index];
+            const startX = event.clientX;
+            const startWidth = col.getBoundingClientRect().width || th.getBoundingClientRect().width;
+            const minWidth = 90;
+
+            const onMouseMove = (moveEvent) => {
+                const delta = moveEvent.clientX - startX;
+                const nextWidth = Math.max(minWidth, Math.round(startWidth + delta));
+                col.style.width = `${nextWidth}px`;
+            };
+
+            const onMouseUp = () => {
+                window.removeEventListener('mousemove', onMouseMove);
+                window.removeEventListener('mouseup', onMouseUp);
+            };
+
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', onMouseUp);
+        });
+    });
+}
+
 function renderPortsRows() {
     dom.portsListBody.innerHTML = '';
+    if (state.portsLoading) {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td colspan="7" class="ports-loading">
+                <div class="ports-loading-wrap">
+                    <span class="ports-spinner"></span>
+                    <span>Chargement des ports actifs...</span>
+                </div>
+            </td>
+        `;
+        dom.portsListBody.appendChild(row);
+        return;
+    }
+
     if (!state.ports.length) {
         const row = document.createElement('tr');
-        row.innerHTML = `<td colspan="5" class="ports-empty">Aucun port actif détecté.</td>`;
+        row.innerHTML = `<td colspan="7" class="ports-empty">Aucun port actif détecté.</td>`;
         dom.portsListBody.appendChild(row);
         return;
     }
@@ -137,12 +193,16 @@ function renderPortsRows() {
     state.ports.forEach((entry) => {
         const row = document.createElement('tr');
         const safeName = escapeHtml(entry.processName || 'Inconnu');
-        const safeCmd = escapeHtml(entry.command || '—');
+        const safeProgram = escapeHtml(entry.program || '—');
+        const safeFramework = escapeHtml(entry.framework || '—');
+        const safeStatus = escapeHtml(entry.status || 'unknown');
         row.innerHTML = `
             <td><span class="port-tag">:${entry.port}</span></td>
+            <td class="process-cell" title="${safeName}">${safeName}</td>
             <td>${entry.pid}</td>
-            <td>${safeName}</td>
-            <td class="command-cell" title="${safeCmd}">${safeCmd}</td>
+            <td class="program-cell" title="${safeProgram}">${safeProgram}</td>
+            <td>${safeFramework}</td>
+            <td><span class="port-status status-${safeStatus}">${safeStatus}</span></td>
             <td><button class="btn-kill-port" data-pid="${entry.pid}" data-port="${entry.port}">Kill</button></td>
         `;
         dom.portsListBody.appendChild(row);
@@ -150,11 +210,15 @@ function renderPortsRows() {
 }
 
 async function refreshPortsList() {
+    state.portsLoading = true;
+    renderPortsRows();
     try {
         state.ports = await window.api.listActivePorts();
-        renderPortsRows();
     } catch (error) {
         setPortsFeedback(`Impossible de charger les ports: ${error.message}`, 'error');
+    } finally {
+        state.portsLoading = false;
+        renderPortsRows();
     }
 }
 
@@ -797,6 +861,7 @@ async function init() {
     document.getElementById('win-close').onclick = () => window.api.windowControl('close');
 
     initEmojiPicker();
+    initPortsTableResizers();
 
     dom.cmdEmoji.onclick = (e) => {
         e.stopPropagation();

@@ -1086,8 +1086,14 @@ html, body {
 .ports-table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 760px;
+    min-width: 980px;
+    table-layout: fixed;
 }
+
+#ports-col-port { width: 82px; }
+#ports-col-pid { width: 88px; }
+#ports-col-status { width: 110px; }
+#ports-col-action { width: 110px; }
 
 .ports-table th,
 .ports-table td {
@@ -1098,20 +1104,77 @@ html, body {
 }
 
 .ports-table th {
+    position: relative;
     color: var(--text-dim);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     font-size: 0.72rem;
+    user-select: none;
 }
 
-.ports-table td.command-cell {
-    max-width: 460px;
+.ports-table td.process-cell,
+.ports-table td.program-cell,
+.ports-table td {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.ports-table td.process-cell,
+.ports-table td.program-cell {
     color: #c8d2df;
     font-family: 'Fira Code', monospace;
     font-size: 0.78rem;
+}
+
+.col-resize-handle {
+    position: absolute;
+    top: 0;
+    right: -3px;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 2;
+}
+
+.col-resize-handle::before {
+    content: '';
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: 2px;
+    width: 1px;
+    background: rgba(148, 163, 184, 0.45);
+}
+
+.col-resize-handle:hover {
+    background: rgba(99, 102, 241, 0.35);
+}
+
+.col-resize-handle:hover::before {
+    background: rgba(99, 102, 241, 0.9);
+}
+
+.port-status {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.port-status.status-healthy {
+    color: #86efac;
+    border: 1px solid rgba(16, 185, 129, 0.45);
+    background: rgba(16, 185, 129, 0.16);
+}
+
+.port-status.status-unknown {
+    color: #cbd5e1;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    background: rgba(148, 163, 184, 0.12);
 }
 
 .port-tag {
@@ -1144,4 +1207,28 @@ html, body {
 .ports-empty {
     padding: 1.2rem;
     color: var(--text-dim);
+}
+
+.ports-loading {
+    padding: 1.2rem;
+}
+
+.ports-loading-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+    color: var(--text-dim);
+}
+
+.ports-spinner {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid rgba(99, 102, 241, 0.3);
+    border-top-color: var(--primary);
+    animation: ports-spin 0.8s linear infinite;
+}
+
+@keyframes ports-spin {
+    to { transform: rotate(360deg); }
 }
