@@ -5,6 +5,8 @@ import 'xterm/css/xterm.css';
 const state = {
     currentView: 'selection',
     projects: [],
+    projectOrder: [],
+    emojiRecentOrder: [],
     metadata: {}, // Map of path -> { displayName, customRoot, isFavorite, logoPath, customCommands: [{emoji, label, command, desc}] }
     activeProjectId: null,
     activeProjectRoot: null,
@@ -12,8 +14,15 @@ const state = {
     activeTerminalId: null,
     rootPath: null,
     editingProject: null,
+    isCreatingProject: false,
+    modalDraftLogoPath: null,
     editingCommandIndex: null,
     deleteCallback: null,
+    deleteCancelCallback: null,
+    isSelectingProject: false,
+    draggingProjectPath: null,
+    projectDragMoved: false,
+    sidebarDropIndex: null,
     recentlyOpened: [], // Array of project paths opened in current session (non-favorites only)
     ports: [],
     portsFeedback: null,
@@ -24,11 +33,14 @@ const dom = {
     navWorkspaceBtn: document.getElementById('nav-workspace-btn'),
     navProjectsBtn: document.getElementById('nav-projects-btn'),
     navPortsBtn: document.getElementById('nav-ports-btn'),
+    navInfoBtn: document.getElementById('nav-info-btn'),
     selectionView: document.getElementById('selection-view'),
     dashboardView: document.getElementById('dashboard-view'),
     portsView: document.getElementById('ports-view'),
+    infosView: document.getElementById('infos-view'),
     projectList: document.getElementById('project-list'),
     favoritesList: document.getElementById('favorites-list'),
+    selectionDivider: document.getElementById('selection-divider'),
     commandGrid: document.getElementById('command-grid'),
     terminalWrapper: document.getElementById('terminal-wrapper'),
     tabsContainer: document.getElementById('tabs-container'),
@@ -40,6 +52,9 @@ const dom = {
     portsFeedback: document.getElementById('ports-feedback'),
     portsTableHeadWrap: document.getElementById('ports-table-head-wrap'),
     portsTableScroll: document.getElementById('ports-table-scroll'),
+    infosRepoBtn: document.getElementById('infos-repo-btn'),
+    infosSiteBtn: document.getElementById('infos-site-btn'),
+    infosSupportBtn: document.getElementById('infos-support-btn'),
 
     addProjectBtn: document.getElementById('add-project-btn'),
 
@@ -48,8 +63,12 @@ const dom = {
 
     // Modals
     editModal: document.getElementById('edit-modal'),
+    editModalTitle: document.getElementById('edit-modal-title'),
     modalName: document.getElementById('edit-display-name'),
     modalRoot: document.getElementById('edit-root-path'),
+    editModalFeedback: document.getElementById('edit-modal-feedback'),
+    modalBrowseRoot: document.getElementById('modal-browse-root'),
+    modalDeleteProject: document.getElementById('modal-delete-project'),
     modalSave: document.getElementById('modal-save'),
     modalCancel: document.getElementById('modal-cancel'),
     modalLogoPicker: document.getElementById('modal-logo-picker'),
@@ -70,26 +89,83 @@ const dom = {
     deleteCancelBtn: document.getElementById('delete-cancel'),
 };
 let portsTableResizeObserver = null;
+let sidebarWheelRaf = null;
+let sidebarWheelTarget = 0;
 
 function focusActiveTerminal() {
     const active = state.terminals.find(t => t.id === state.activeTerminalId);
     if (active) active.xterm.focus();
 }
 
+function setEditModalFeedback(message = '') {
+    if (!dom.editModalFeedback) return;
+    dom.editModalFeedback.textContent = message;
+    dom.editModalFeedback.classList.toggle('hidden', !message);
+}
+
 function isProjectRunning(projectId) {
     return state.terminals.some(t => t.projectId === projectId && t.isRunning);
+}
+
+function animateSidebarWheelScroll() {
+    const el = dom.sidebarFavorites;
+    if (!el) {
+        sidebarWheelRaf = null;
+        return;
+    }
+
+    const current = el.scrollLeft;
+    const delta = sidebarWheelTarget - current;
+    if (Math.abs(delta) < 0.5) {
+        el.scrollLeft = sidebarWheelTarget;
+        sidebarWheelRaf = null;
+        return;
+    }
+
+    el.scrollLeft = current + delta * 0.22;
+    sidebarWheelRaf = requestAnimationFrame(animateSidebarWheelScroll);
 }
 
 function getFirstFavoriteProject() {
     return state.projects.find(p => p.isFavorite) || null;
 }
 
+function getFavoriteProjects() {
+    return state.projects.filter((project) => project.isFavorite);
+}
+
 function updateTopNav() {
-    const workspaceEnabled = !!state.activeProjectId || !!getFirstFavoriteProject();
+    const workspaceEnabled = state.projects.length > 0 || !!state.activeProjectId || !!getFirstFavoriteProject();
     dom.navWorkspaceBtn.disabled = !workspaceEnabled;
     dom.navWorkspaceBtn.classList.toggle('active', state.currentView === 'dashboard');
     dom.navProjectsBtn.classList.toggle('active', state.currentView === 'selection');
     dom.navPortsBtn.classList.toggle('active', state.currentView === 'ports');
+    dom.navInfoBtn.classList.toggle('active', state.currentView === 'infos');
+}
+
+function setWorkspaceActionsEnabled(enabled) {
+    dom.addCustomCmdBtn.disabled = !enabled;
+    dom.addTerminalBtn.disabled = !enabled;
+    dom.removeTerminalBtn.disabled = !enabled;
+}
+
+function renderWorkspaceEmptyState() {
+    state.activeProjectId = null;
+    state.activeProjectRoot = null;
+    state.activeTerminalId = null;
+
+    dom.commandGrid.innerHTML = `
+        <div class="workspace-empty-block">
+            Ajoute des projets dans Espace projets et
+            <span class="workspace-empty-inline">clique sur <span class="workspace-empty-star"><span class="icon-mask icon-star" aria-hidden="true"></span></span> pour le mettre en favoris.</span>
+        </div>
+    `;
+    dom.tabsContainer.innerHTML = '';
+    dom.terminalWrapper.innerHTML = `
+        <div class="workspace-empty-shell">Ajoute des projets dans Espace projets pour commencer.</div>
+    `;
+    setWorkspaceActionsEnabled(false);
+    renderSidebarFavorites();
 }
 
 /**
@@ -103,10 +179,12 @@ function renderView(viewName) {
     const showSelection = viewName === 'selection';
     const showDashboard = viewName === 'dashboard';
     const showPorts = viewName === 'ports';
+    const showInfos = viewName === 'infos';
 
     dom.selectionView.classList.toggle('hidden', !showSelection);
     dom.dashboardView.classList.toggle('hidden', !showDashboard);
     dom.portsView.classList.toggle('hidden', !showPorts);
+    dom.infosView.classList.toggle('hidden', !showInfos);
     updateTopNav();
 
     if (showSelection) {
@@ -315,6 +393,10 @@ async function openPortsView() {
     await refreshPortsList();
 }
 
+function openInfosView() {
+    renderView('infos');
+}
+
 async function killPortProcess(pid, port) {
     const result = await window.api.killProcessByPid(pid);
     if (!result?.ok) {
@@ -332,11 +414,11 @@ async function killPortProcess(pid, port) {
 async function pickLogoForModal() {
     const p = state.editingProject;
     if (!p) return;
-    const path = await window.api.pickLogo(p.customRoot || p.path);
+    const basePath = normalizePath(dom.modalRoot.value || p.customRoot || p.path || state.rootPath);
+    const path = await window.api.pickLogo(basePath);
     if (path) {
-        if (!state.metadata[p.path]) state.metadata[p.path] = {};
-        state.metadata[p.path].logoPath = path;
-        updateModalLogo(path, p.displayName || p.name);
+        state.modalDraftLogoPath = normalizePath(path);
+        updateModalLogo(state.modalDraftLogoPath, dom.modalName.value || p.displayName || p.name);
     }
 }
 
@@ -344,47 +426,144 @@ function updateModalLogo(logoPath, name) {
     if (logoPath) {
         dom.modalLogoImg.src = `logo://img?path=${encodeURIComponent(logoPath)}`;
         dom.modalLogoImg.classList.remove('hidden');
-        dom.modalLogoPlaceholder.textContent = '';
+        dom.modalLogoPlaceholder.innerHTML = '';
     } else {
         dom.modalLogoImg.classList.add('hidden');
-        dom.modalLogoPlaceholder.textContent = (name || '?')[0].toUpperCase();
+        dom.modalLogoPlaceholder.innerHTML = '<span class="icon-mask icon-image-plus" aria-hidden="true"></span>';
     }
 }
 
 /**
  * Metadata
  */
+function normalizeMetadataMap(rawMetadata = {}) {
+    const normalized = {};
+    let changed = false;
+
+    Object.entries(rawMetadata || {}).forEach(([rawPath, rawMeta]) => {
+        const normalizedPath = normalizePath(rawPath);
+        const meta = rawMeta || {};
+        const nextMeta = {
+            ...meta,
+            customRoot: normalizePath(meta.customRoot || normalizedPath),
+            logoPath: meta.logoPath ? normalizePath(meta.logoPath) : null,
+            customCommands: Array.isArray(meta.customCommands) ? meta.customCommands : []
+        };
+
+        if (rawPath !== normalizedPath) changed = true;
+        if (!Array.isArray(meta.customCommands)) changed = true;
+        if ((meta.customRoot || '') !== nextMeta.customRoot) changed = true;
+        if ((meta.logoPath || null) !== nextMeta.logoPath) changed = true;
+
+        normalized[normalizedPath] = {
+            ...(normalized[normalizedPath] || {}),
+            ...nextMeta
+        };
+    });
+
+    const rawKeys = Object.keys(rawMetadata || {}).map(normalizePath).sort();
+    const normalizedKeys = Object.keys(normalized).sort();
+    if (rawKeys.length !== normalizedKeys.length || rawKeys.some((value, idx) => value !== normalizedKeys[idx])) {
+        changed = true;
+    }
+
+    return { normalized, changed };
+}
+
 async function loadMetadata() {
-    state.metadata = await window.api.getMetadata();
+    const rawMetadata = await window.api.getMetadata();
+    const { normalized, changed } = normalizeMetadataMap(rawMetadata);
+    state.metadata = normalized;
+    if (changed) {
+        await saveMetadata();
+    }
 }
 
 async function saveMetadata() {
     await window.api.saveMetadata(state.metadata);
 }
 
+function normalizePath(pathValue) {
+    return String(pathValue || '').replace(/\\/g, '/');
+}
+
+async function loadProjectOrder() {
+    state.projectOrder = await window.api.getProjectOrder();
+}
+
+async function loadEmojiOrder() {
+    const raw = await window.api.getEmojiOrder();
+    state.emojiRecentOrder = Array.isArray(raw)
+        ? [...new Set(raw.map((item) => String(item || '')).filter(Boolean))]
+        : [];
+}
+
+async function saveProjectOrder(order = state.projectOrder) {
+    state.projectOrder = [...order];
+    await window.api.saveProjectOrder(state.projectOrder);
+}
+
+async function saveEmojiOrder(order = state.emojiRecentOrder) {
+    state.emojiRecentOrder = [...new Set(order.map((item) => String(item || '')).filter(Boolean))];
+    await window.api.saveEmojiOrder(state.emojiRecentOrder);
+}
+
+function normalizeProjectOrder(order, existingPaths) {
+    const existingSet = new Set(existingPaths);
+    const unique = [];
+    const seen = new Set();
+
+    order.forEach((rawPath) => {
+        const normalized = normalizePath(rawPath);
+        if (!normalized || seen.has(normalized) || !existingSet.has(normalized)) return;
+        seen.add(normalized);
+        unique.push(normalized);
+    });
+
+    existingPaths.forEach((projectPath) => {
+        if (seen.has(projectPath)) return;
+        seen.add(projectPath);
+        unique.push(projectPath);
+    });
+
+    return unique;
+}
+
+async function syncAndSaveProjectOrder(optionalOrder = null) {
+    const currentPaths = state.projects.map((project) => project.path);
+    const nextOrder = normalizeProjectOrder(optionalOrder || state.projectOrder, currentPaths);
+    const changed = nextOrder.length !== state.projectOrder.length
+        || nextOrder.some((value, idx) => value !== state.projectOrder[idx]);
+    state.projectOrder = nextOrder;
+    if (changed) {
+        await saveProjectOrder(nextOrder);
+    }
+}
+
 /**
  * Projects — chargés depuis config.json (projectMetadata)
  */
 async function loadProjects() {
-    await loadMetadata();
+    await Promise.all([loadMetadata(), loadProjectOrder()]);
 
     state.projects = Object.entries(state.metadata)
         .filter(([projectPath, meta]) => !meta._removed)
         .map(([projectPath, meta]) => {
-            const normalizedPath = projectPath.replace(/\\/g, '/');
+            const normalizedPath = normalizePath(projectPath);
             const name = meta.displayName || normalizedPath.split('/').pop();
             return {
                 id: normalizedPath,
                 name,
                 path: normalizedPath,
                 displayName: meta.displayName || name,
-                customRoot: (meta.customRoot || normalizedPath).replace(/\\/g, '/'),
+                customRoot: normalizePath(meta.customRoot || normalizedPath),
                 isFavorite: !!meta.isFavorite,
-                logoPath: meta.logoPath ? meta.logoPath.replace(/\\/g, '/') : null,
+                logoPath: meta.logoPath ? normalizePath(meta.logoPath) : null,
                 customCommands: meta.customCommands || []
             };
         });
 
+    await syncAndSaveProjectOrder();
     renderProjectLists();
     renderSidebarFavorites();
     updateTopNav();
@@ -394,29 +573,28 @@ async function loadProjects() {
  * Ajouter un projet via dialog dossier
  */
 async function addProject() {
-    const project = await window.api.pickFolder();
-    if (!project) return;
-    const p = project.path.replace(/\\/g, '/');
-    if (state.metadata[p] && !state.metadata[p]._removed) return; // déjà présent et actif
-    const existing = state.metadata[p] || {};
-    state.metadata[p] = {
-        ...existing,
-        displayName: existing.displayName || project.name,
-        customRoot: existing.customRoot || p,
-        isFavorite: existing.isFavorite || false,
-        customCommands: existing.customCommands || [],
-        _removed: false
-    };
-    await saveMetadata();
-    await loadProjects();
+    state.editingProject = { path: '', name: '', displayName: '', customRoot: '' };
+    state.isCreatingProject = true;
+    state.modalDraftLogoPath = null;
+    setEditModalFeedback('');
+    dom.editModal.classList.add('creating');
+    dom.editModalTitle.textContent = 'Ajouter un projet';
+    dom.modalDeleteProject.classList.add('hidden');
+    dom.modalName.value = '';
+    dom.modalRoot.value = '';
+    updateModalLogo(null, '?');
+    dom.editModal.classList.remove('hidden');
 }
 
 function renderProjectLists() {
     dom.projectList.innerHTML = '';
     dom.favoritesList.innerHTML = '';
 
-    const favs = state.projects.filter(p => p.isFavorite);
-    const regular = state.projects.filter(p => !p.isFavorite);
+    const sorter = (a, b) => a.displayName.localeCompare(b.displayName, 'fr', { sensitivity: 'base' });
+    const favs = state.projects.filter(p => p.isFavorite).sort(sorter);
+    const regular = state.projects.filter(p => !p.isFavorite).sort(sorter);
+
+    dom.selectionDivider.classList.toggle('hidden', favs.length === 0);
 
     favs.forEach(p => dom.favoritesList.appendChild(createProjectItem(p)));
     regular.forEach(p => dom.projectList.appendChild(createProjectItem(p)));
@@ -424,28 +602,27 @@ function renderProjectLists() {
 
 function createProjectItem(p) {
     const item = document.createElement('div');
+    item.dataset.path = p.path;
     item.className = 'project-item' + (isProjectRunning(p.path) ? ' running' : '');
 
     const initial = (p.displayName || p.name || '?')[0].toUpperCase();
     const avatarContent = p.logoPath
-        ? `<img src="logo://img?path=${encodeURIComponent(p.logoPath)}" alt="${initial}">`
+        ? `<img src="logo://img?path=${encodeURIComponent(p.logoPath)}" alt="${initial}" draggable="false">`
         : `<span>${initial}</span>`;
 
     item.innerHTML = `
         <div class="project-avatar">${avatarContent}</div>
         <div class="info">
             <div class="name">${p.displayName}</div>
-            <div class="path">${p.path}</div>
+            <div class="path">${p.customRoot || p.path}</div>
         </div>
         <div class="actions">
-            <button class="action-btn trash" title="Retirer le projet"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
-            <button class="action-btn edit" title="Modifier">✎</button>
-            <button class="action-btn star ${p.isFavorite ? 'active' : ''}" title="Favori">★</button>
+            <button class="action-btn star ${p.isFavorite ? 'active' : ''}" title="Favori"><span class="icon-mask icon-star" aria-hidden="true"></span></button>
         </div>
     `;
 
     item.onclick = (e) => {
-        if (!e.target.closest('.actions')) selectProject(p);
+        if (!e.target.closest('.actions')) openEditModal(p);
     };
 
     item.querySelector('.star').onclick = (e) => {
@@ -453,20 +630,11 @@ function createProjectItem(p) {
         toggleFavorite(p);
     };
 
-    item.querySelector('.edit').onclick = (e) => {
-        e.stopPropagation();
-        openEditModal(p);
-    };
-
-    item.querySelector('.trash').onclick = (e) => {
-        e.stopPropagation();
-        removeProject(p);
-    };
-
     return item;
 }
 
-async function removeProject(p) {
+async function removeProject(p, options = {}) {
+    const { onCancel = null } = options;
     showConfirmModal(
         `Retirer le projet ?`,
         `Retirer "${p.displayName}" de la liste ? (Les commandes enregistrées seront conservées dans le fichier config.)`,
@@ -476,7 +644,8 @@ async function removeProject(p) {
             }
             await saveMetadata();
             await loadProjects();
-        }
+        },
+        onCancel
     );
 }
 
@@ -503,7 +672,7 @@ function openEditCommandModal(index, cmd) {
     dom.cmdModal.classList.remove('hidden');
 }
 
-function saveCustomCommand() {
+async function saveCustomCommand() {
     const meta = state.metadata[state.activeProjectId] || {};
     if (!meta.customCommands) meta.customCommands = [];
     
@@ -520,16 +689,26 @@ function saveCustomCommand() {
     }
 
     state.metadata[state.activeProjectId] = meta;
-    saveMetadata();
+    await saveMetadata();
+
+    const usedEmoji = String(cmdData.emoji || '').trim();
+    if (usedEmoji) {
+        state.emojiRecentOrder = state.emojiRecentOrder.filter((emoji) => emoji !== usedEmoji);
+        state.emojiRecentOrder.unshift(usedEmoji);
+        await saveEmojiOrder();
+        initEmojiPicker();
+    }
+
     dom.cmdModal.classList.add('hidden');
     focusActiveTerminal();
     renderCommands(state.activeProjectRoot);
 }
 
-function showConfirmModal(title, message, callback) {
+function showConfirmModal(title, message, callback, onCancel = null) {
     document.getElementById('delete-confirm-title').textContent = title;
     document.getElementById('delete-confirm-message').textContent = message;
     state.deleteCallback = callback;
+    state.deleteCancelCallback = onCancel;
     dom.deleteModal.classList.remove('hidden');
 }
 
@@ -557,6 +736,7 @@ function deleteCommand() {
         state.deleteCallback();
         state.deleteCallback = null;
     }
+    state.deleteCancelCallback = null;
 }
 
 async function launchCommand(command) {
@@ -839,66 +1019,242 @@ async function renderCommands(projectPath) {
  * Project Selection
  */
 async function selectProject(p) {
-    state.activeProjectId = p.path;
-    const meta = state.metadata[p.path] || {};
-
-    const root = meta.customRoot || p.path;
-    state.activeProjectRoot = root;
-
-    // Add to recently opened if not a favorite
-    if (!p.isFavorite && !state.recentlyOpened.includes(p.path)) {
-        state.recentlyOpened.push(p.path);
-    }
-
-    renderSidebarFavorites();
-
-    // Réattacher uniquement les conteneurs de terminaux du projet actif
-    dom.terminalWrapper.innerHTML = '';
-    state.terminals
-        .filter(t => t.projectId === p.path)
-        .forEach(t => dom.terminalWrapper.appendChild(t.container));
-
-    renderCommands(root);
-    renderView('dashboard');
-
-    const projectTerminals = state.terminals.filter(t => t.projectId === p.path);
-    if (projectTerminals.length > 0) {
-        // Réutiliser les terminaux existants du projet
-        switchTerminal(projectTerminals[projectTerminals.length - 1].id);
-        renderTabs();
-        setTimeout(() => {
-            const active = state.terminals.find(t => t.id === state.activeTerminalId);
-            if (active) { active.fitAddon.fit(); active.xterm.focus(); }
-        }, 50);
-    } else {
-        addTerminal(root);
-    }
-}
-
-async function openWorkspaceView() {
-    if (state.activeProjectId) {
-        renderView('dashboard');
+    if (!p || state.isSelectingProject) return;
+    if (state.activeProjectId === p.path && state.currentView === 'dashboard') {
         focusActiveTerminal();
         return;
     }
 
-    const firstFavorite = getFirstFavoriteProject();
-    if (firstFavorite) {
-        await selectProject(firstFavorite);
+    state.isSelectingProject = true;
+    try {
+        state.activeProjectId = p.path;
+        const meta = state.metadata[p.path] || {};
+
+        const root = meta.customRoot || p.path;
+        state.activeProjectRoot = root;
+        setWorkspaceActionsEnabled(true);
+
+        // Add to recently opened if not a favorite
+        if (!p.isFavorite && !state.recentlyOpened.includes(p.path)) {
+            state.recentlyOpened.push(p.path);
+        }
+
+        renderSidebarFavorites();
+
+        // Réattacher uniquement les conteneurs de terminaux du projet actif
+        dom.terminalWrapper.innerHTML = '';
+        state.terminals
+            .filter(t => t.projectId === p.path)
+            .forEach(t => dom.terminalWrapper.appendChild(t.container));
+
+        renderCommands(root);
+        renderView('dashboard');
+
+        const projectTerminals = state.terminals.filter(t => t.projectId === p.path);
+        if (projectTerminals.length > 0) {
+            // Réutiliser les terminaux existants du projet
+            switchTerminal(projectTerminals[projectTerminals.length - 1].id);
+            renderTabs();
+            setTimeout(() => {
+                const active = state.terminals.find(t => t.id === state.activeTerminalId);
+                if (active) { active.fitAddon.fit(); active.xterm.focus(); }
+            }, 50);
+        } else {
+            await addTerminal(root);
+        }
+    } finally {
+        state.isSelectingProject = false;
+    }
+}
+
+async function openWorkspaceView() {
+    const favorites = getFavoriteProjects();
+    if (favorites.length === 0) {
+        renderView('dashboard');
+        renderWorkspaceEmptyState();
         return;
     }
 
-    renderView('selection');
+    if (favorites.length === 1) {
+        await selectProject(favorites[0]);
+        return;
+    }
+
+    if (state.activeProjectId) {
+        const active = state.projects.find((project) => project.path === state.activeProjectId);
+        if (active) {
+            renderView('dashboard');
+            setWorkspaceActionsEnabled(true);
+            focusActiveTerminal();
+            return;
+        }
+    }
+
+    await selectProject(favorites[0]);
+}
+
+function clearSidebarDropHints() {
+    dom.sidebarFavorites
+        .querySelectorAll('.sidebar-fav-item.drop-shift-block, .sidebar-fav-item.drop-shift-inline')
+        .forEach((node) => node.classList.remove('drop-shift-block', 'drop-shift-inline'));
+    const indicator = dom.sidebarFavorites.querySelector('.sidebar-drop-indicator');
+    if (indicator) {
+        indicator.classList.remove('visible', 'axis-x', 'axis-y');
+        indicator.style.top = '';
+        indicator.style.left = '';
+    }
+    state.sidebarDropIndex = null;
+}
+
+function updateSidebarDropHintFromPointer(clientX, clientY) {
+    const draggingPath = state.draggingProjectPath;
+    if (!draggingPath) return;
+
+    const allItems = Array.from(dom.sidebarFavorites.querySelectorAll('.sidebar-fav-item'));
+    const candidates = allItems
+        .filter((node) => node.dataset.path && node.dataset.path !== draggingPath);
+    if (!candidates.length) {
+        clearSidebarDropHints();
+        return;
+    }
+
+    const containerRect = dom.sidebarFavorites.getBoundingClientRect();
+    const firstRect = candidates[0].getBoundingClientRect();
+    const lastRect = candidates[candidates.length - 1].getBoundingClientRect();
+    const isHorizontalBar = getComputedStyle(dom.sidebarFavorites).flexDirection.startsWith('row');
+
+    let insertIndex = candidates.length;
+    let lineX = null;
+    let lineY = null;
+
+    if (isHorizontalBar) {
+        if (clientX <= firstRect.left) {
+            insertIndex = 0;
+        } else if (clientX >= lastRect.right) {
+            insertIndex = candidates.length;
+        } else {
+            for (let idx = 0; idx < candidates.length - 1; idx += 1) {
+                const prevRect = candidates[idx].getBoundingClientRect();
+                const nextRect = candidates[idx + 1].getBoundingClientRect();
+                const gapCenter = (prevRect.right + nextRect.left) / 2;
+                if (clientX < gapCenter) {
+                    insertIndex = idx + 1;
+                    break;
+                }
+            }
+        }
+
+        if (insertIndex <= 0) {
+            lineX = (firstRect.left - containerRect.left) - 4;
+        } else if (insertIndex >= candidates.length) {
+            lineX = (lastRect.right - containerRect.left) + 4;
+        } else {
+            const prevRect = candidates[insertIndex - 1].getBoundingClientRect();
+            const nextRect = candidates[insertIndex].getBoundingClientRect();
+            lineX = ((prevRect.right + nextRect.left) / 2) - containerRect.left;
+        }
+    } else {
+        if (clientY <= firstRect.bottom) {
+            insertIndex = 0;
+        } else if (clientY >= lastRect.bottom) {
+            insertIndex = candidates.length;
+        } else {
+            for (let idx = 0; idx < candidates.length - 1; idx += 1) {
+                const prevRect = candidates[idx].getBoundingClientRect();
+                const nextRect = candidates[idx + 1].getBoundingClientRect();
+                const gapCenter = (prevRect.bottom + nextRect.top) / 2;
+                if (clientY < gapCenter) {
+                    insertIndex = idx + 1;
+                    break;
+                }
+            }
+        }
+
+        if (insertIndex <= 0) {
+            lineY = (firstRect.top - containerRect.top) - 4;
+        } else if (insertIndex >= candidates.length) {
+            lineY = (lastRect.bottom - containerRect.top) + 4;
+        } else {
+            const prevRect = candidates[insertIndex - 1].getBoundingClientRect();
+            const nextRect = candidates[insertIndex].getBoundingClientRect();
+            lineY = ((prevRect.bottom + nextRect.top) / 2) - containerRect.top;
+        }
+    }
+
+    clearSidebarDropHints();
+    state.sidebarDropIndex = insertIndex;
+
+    const indicator = dom.sidebarFavorites.querySelector('.sidebar-drop-indicator');
+    if (indicator) {
+        if (isHorizontalBar) {
+            indicator.classList.add('axis-x');
+            indicator.style.left = `${Math.max(0, Math.round(lineX))}px`;
+        } else {
+            indicator.classList.add('axis-y');
+            indicator.style.top = `${Math.max(0, Math.round(lineY))}px`;
+        }
+        indicator.classList.add('visible');
+    }
+
+    candidates
+        .slice(insertIndex)
+        .forEach((node) => node.classList.add(isHorizontalBar ? 'drop-shift-inline' : 'drop-shift-block'));
+}
+
+async function commitSidebarProjectDrop({ fallbackToEnd = false } = {}) {
+    const draggingPath = state.draggingProjectPath;
+    if (!draggingPath) return false;
+
+    const visibleOrder = Array.from(dom.sidebarFavorites.querySelectorAll('.sidebar-fav-item'))
+        .map((node) => node.dataset.path)
+        .filter(Boolean);
+    const fromIndex = visibleOrder.indexOf(draggingPath);
+    if (fromIndex === -1) return false;
+
+    const reordered = [...visibleOrder];
+    reordered.splice(fromIndex, 1);
+
+    let insertIndex = Number.isInteger(state.sidebarDropIndex) ? state.sidebarDropIndex : reordered.length;
+    if (!Number.isInteger(state.sidebarDropIndex) && !fallbackToEnd) {
+        return false;
+    }
+
+    insertIndex = Math.max(0, Math.min(insertIndex, reordered.length));
+    reordered.splice(insertIndex, 0, draggingPath);
+
+    const hiddenStillKnown = state.projectOrder.filter((projectPath) => !reordered.includes(projectPath));
+    await syncAndSaveProjectOrder([...reordered, ...hiddenStillKnown]);
+    clearSidebarDropHints();
+    state.projectDragMoved = false;
+    renderProjectLists();
+    renderSidebarFavorites();
+    return true;
 }
 
 function renderSidebarFavorites() {
     dom.sidebarFavorites.innerHTML = '';
+    state.sidebarDropIndex = null;
     const favs = state.projects.filter(p => p.isFavorite);
     const recentProjects = state.projects.filter(p => state.recentlyOpened.includes(p.path));
-    
-    const allToShow = [...favs, ...recentProjects];
+
+    const dedup = new Map();
+    [...favs, ...recentProjects].forEach((project) => {
+        if (!dedup.has(project.path)) {
+            dedup.set(project.path, project);
+        }
+    });
+    const position = new Map(state.projectOrder.map((projectPath, index) => [projectPath, index]));
+    const allToShow = [...dedup.values()].sort((a, b) => {
+        const indexA = position.has(a.path) ? position.get(a.path) : Number.MAX_SAFE_INTEGER;
+        const indexB = position.has(b.path) ? position.get(b.path) : Number.MAX_SAFE_INTEGER;
+        if (indexA !== indexB) return indexA - indexB;
+        return a.displayName.localeCompare(b.displayName, 'fr', { sensitivity: 'base' });
+    });
+
     allToShow.forEach(p => {
         const item = document.createElement('div');
+        item.dataset.path = p.path;
+        item.draggable = true;
         item.className = 'sidebar-fav-item'
             + (p.path === state.activeProjectId ? ' active' : '')
             + (isProjectRunning(p.path) ? ' running' : '');
@@ -907,13 +1263,70 @@ function renderSidebarFavorites() {
             const img = document.createElement('img');
             img.src = `logo://img?path=${encodeURIComponent(p.logoPath)}`;
             img.alt = p.displayName[0].toUpperCase();
+            img.draggable = false;
+            img.addEventListener('dragstart', (event) => event.preventDefault());
             item.appendChild(img);
         } else {
             item.textContent = p.displayName[0].toUpperCase();
         }
-        item.onclick = () => selectProject(p);
+        item.onclick = () => {
+            selectProject(p);
+        };
+
+        item.ondragstart = (event) => {
+            state.draggingProjectPath = p.path;
+            state.projectDragMoved = false;
+            item.classList.add('dragging');
+            dom.sidebarFavorites.classList.add('drag-active');
+            event.dataTransfer.setData('text/plain', p.path);
+            event.dataTransfer.effectAllowed = 'move';
+            updateSidebarDropHintFromPointer(event.clientX, event.clientY);
+        };
+
+        item.ondragover = (event) => {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            const draggingPath = state.draggingProjectPath;
+            if (!draggingPath || draggingPath === p.path) return;
+            state.projectDragMoved = true;
+            updateSidebarDropHintFromPointer(event.clientX, event.clientY);
+        };
+
+        item.ondrop = async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            updateSidebarDropHintFromPointer(event.clientX, event.clientY);
+            await commitSidebarProjectDrop({ fallbackToEnd: true });
+        };
+
+        item.ondragend = () => {
+            item.classList.remove('dragging');
+            clearSidebarDropHints();
+            dom.sidebarFavorites.classList.remove('drag-active');
+            state.projectDragMoved = false;
+            state.draggingProjectPath = null;
+        };
+
         dom.sidebarFavorites.appendChild(item);
     });
+
+    const dropIndicator = document.createElement('div');
+    dropIndicator.className = 'sidebar-drop-indicator';
+    dom.sidebarFavorites.appendChild(dropIndicator);
+
+    dom.sidebarFavorites.ondragover = (event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        state.projectDragMoved = true;
+        updateSidebarDropHintFromPointer(event.clientX, event.clientY);
+    };
+
+    dom.sidebarFavorites.ondrop = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        updateSidebarDropHintFromPointer(event.clientX, event.clientY);
+        await commitSidebarProjectDrop({ fallbackToEnd: true });
+    };
 }
 
 /**
@@ -922,29 +1335,47 @@ function renderSidebarFavorites() {
 async function toggleFavorite(project) {
     const path = project.path;
     if (!state.metadata[path]) state.metadata[path] = {};
-    state.metadata[path].isFavorite = !state.metadata[path].isFavorite;
+    const nextFavorite = !state.metadata[path].isFavorite;
+    state.metadata[path].isFavorite = nextFavorite;
+    if (nextFavorite) {
+        state.projectOrder = state.projectOrder.filter((projectPath) => projectPath !== path);
+        state.projectOrder.push(path);
+        await saveProjectOrder();
+    }
     await saveMetadata();
     await loadProjects();
 }
 
 function openEditModal(p) {
     state.editingProject = p;
+    state.isCreatingProject = false;
+    state.modalDraftLogoPath = p.logoPath ? normalizePath(p.logoPath) : null;
+    setEditModalFeedback('');
+    dom.editModal.classList.remove('creating');
+    dom.editModalTitle.textContent = 'Personnaliser le projet';
+    dom.modalDeleteProject.classList.remove('hidden');
     dom.modalName.value = p.displayName;
-    dom.modalRoot.value = p.customRoot;
-    updateModalLogo(p.logoPath, p.displayName || p.name);
+    dom.modalRoot.value = normalizePath(p.customRoot || p.path);
+    updateModalLogo(state.modalDraftLogoPath, p.displayName || p.name);
     dom.editModal.classList.remove('hidden');
 }
 
 const EMOJIS = [
-    '🚀', '🛠️', '📦', '🧪', '⚡', '🐳', '🐧', '🐘', '🐍', '🦀', '🎨', '🔍', '🏗️', '🧹', '📁', '🌐', '📱', '🔋', '💾', '🔥',
-    '💻', '🖥️', '⌨️', '🖱️', '📡', '🛰️', '🌡️', '🎬', '🎯', '📢', '🎧', '📷', '🎬', '🎭', '🎨', '🎹', '🎸', '🎮', '🕹️', '🎰',
-    '⚙️', '🖇️', '🔨', '🔩', '🔧', '🪛', '🪚', '⛏️', '⚒️', '⛏️', '🛠️', '🧱', '⛓️', '🪝', '🪚', '🔫', '💣', '🛡️', '⚔️', '🗝️',
-    '🧪', '🧬', '🔬', '🔭', '📡', '💉', '🩸', '💊', '🩹', '🩺', '🚪', '🪑', '🚽', '🚿', '🛁', '🪠', '🔑', '🗝️', '🛋️', '🛏️'
+    '💻', '🧑‍💻', '⚙️', '🔧', '🛠️', '🚀', '🔥', '⚡', '🐞', '🧪', '📦', '🐳', '🌐', '🔒', '🔑', '📊', '📈', '📉', '🧠', '🤖',
+    '🔍', '🔄', '♻️', '⏱️', '⌛', '☕', '💡', '🧩', '🧱', '🔀', '🌿', '📥', '📤', '🏷️', '🗂️', '📁', '📂', '🗄️', '📡', '📶',
+    '🛰️', '🔌', '🔋', '🖥️', '⌨️', '🖱️', '💾', '💿', '📀', '📜', '📝', '🧾', '🧮', '🔬', '🧬', '🛡️', '⚠️', '❌', '✅', '✔️',
+    '☑️', '🚧', '🎯', '⭐', '✨', '🌙', '🌞', '🎧', '🍕', '🍔', '🌩️', '⛅', '🌥️', '❄️', '🌡️', '☠️', '🕵️', '👁️', '🕸️', '🧭',
+    '📌', '📍', '🧷', '📬', '🏗️', '🧯'
 ];
 
 function initEmojiPicker() {
+    const baseEmojis = [...new Set(EMOJIS)];
+    const recentFirst = state.emojiRecentOrder.filter((emoji) => baseEmojis.includes(emoji));
+    const remaining = baseEmojis.filter((emoji) => !recentFirst.includes(emoji));
+    const ordered = [...recentFirst, ...remaining];
+
     dom.emojiPicker.innerHTML = '';
-    EMOJIS.forEach(emoji => {
+    ordered.forEach(emoji => {
         const item = document.createElement('div');
         item.className = 'emoji-item';
         item.textContent = emoji;
@@ -994,6 +1425,7 @@ async function init() {
     document.getElementById('win-close').onclick = () => window.api.windowControl('close');
     bindTitlebarManualDrag();
 
+    await loadEmojiOrder();
     initEmojiPicker();
     initPortsTableResizers();
 
@@ -1006,11 +1438,53 @@ async function init() {
         dom.emojiPicker.classList.add('hidden');
     });
 
+    dom.sidebarFavorites.addEventListener('wheel', (event) => {
+        const dashboard = dom.dashboardView;
+        if (!dashboard?.classList.contains('vertical')) return;
+        if (!dom.sidebarFavorites) return;
+
+        const hasHorizontalOverflow = dom.sidebarFavorites.scrollWidth > dom.sidebarFavorites.clientWidth;
+        if (!hasHorizontalOverflow) return;
+
+        const horizontalDelta = event.deltaY !== 0 ? event.deltaY : event.deltaX;
+        if (!horizontalDelta) return;
+
+        event.preventDefault();
+        const maxScrollLeft = Math.max(0, dom.sidebarFavorites.scrollWidth - dom.sidebarFavorites.clientWidth);
+        sidebarWheelTarget = Math.max(0, Math.min(maxScrollLeft, sidebarWheelTarget + horizontalDelta));
+        if (!sidebarWheelRaf) {
+            sidebarWheelRaf = requestAnimationFrame(animateSidebarWheelScroll);
+        }
+    }, { passive: false });
+
+    dom.sidebarFavorites.addEventListener('scroll', () => {
+        if (sidebarWheelRaf) return;
+        sidebarWheelTarget = dom.sidebarFavorites.scrollLeft;
+    }, { passive: true });
+
+    document.addEventListener('dragover', (event) => {
+        if (!state.draggingProjectPath) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+    });
+
+    document.addEventListener('drop', async (event) => {
+        if (!state.draggingProjectPath) return;
+        if (event.defaultPrevented) return;
+        event.preventDefault();
+        await commitSidebarProjectDrop({ fallbackToEnd: true });
+        state.projectDragMoved = false;
+        state.draggingProjectPath = null;
+    });
+
     dom.addProjectBtn.onclick = addProject;
-    document.getElementById('donate-btn').onclick = () => window.api.openUrl('https://www.paypal.com/paypalme/creaprisme');
     dom.navWorkspaceBtn.onclick = openWorkspaceView;
     dom.navProjectsBtn.onclick = () => renderView('selection');
     dom.navPortsBtn.onclick = openPortsView;
+    dom.navInfoBtn.onclick = openInfosView;
+    dom.infosRepoBtn.onclick = () => window.api.openUrl('https://github.com/Mister-Obat/PowerTerminal');
+    dom.infosSiteBtn.onclick = () => window.api.openUrl('https://creaprisme.fr');
+    dom.infosSupportBtn.onclick = () => window.api.openUrl('https://creaprisme.fr/soutenir');
     dom.portsRefreshBtn.onclick = refreshPortsList;
     dom.addTerminalBtn.onclick = () => addTerminal(state.activeProjectRoot);
     dom.removeTerminalBtn.onclick = removeActiveTerminal;
@@ -1018,14 +1492,94 @@ async function init() {
 
     // Modals
     dom.modalLogoPicker.onclick = pickLogoForModal;
-    dom.modalCancel.onclick = () => { dom.editModal.classList.add('hidden'); focusActiveTerminal(); };
+    dom.modalDeleteProject.onclick = async () => {
+        if (state.isCreatingProject) return;
+        const editing = state.editingProject;
+        if (!editing) return;
+        dom.editModal.classList.add('hidden');
+        await removeProject(editing, {
+            onCancel: () => {
+                dom.editModal.classList.remove('hidden');
+            }
+        });
+    };
+    dom.modalBrowseRoot.onclick = async () => {
+        const editing = state.editingProject;
+        if (!editing) return;
+        const defaultPath = normalizePath(dom.modalRoot.value || editing.customRoot || editing.path || state.rootPath);
+        const folder = await window.api.pickFolder(defaultPath);
+        if (!folder?.path) return;
+        dom.modalRoot.value = normalizePath(folder.path);
+        if (state.isCreatingProject && !dom.modalName.value.trim()) {
+            const guessedName = folder.name || dom.modalRoot.value.split('/').pop() || '';
+            dom.modalName.value = guessedName;
+            updateModalLogo(state.modalDraftLogoPath, guessedName);
+        }
+    };
+    dom.modalCancel.onclick = () => {
+        dom.editModal.classList.add('hidden');
+        dom.editModal.classList.remove('creating');
+        state.isCreatingProject = false;
+        state.modalDraftLogoPath = null;
+        setEditModalFeedback('');
+        focusActiveTerminal();
+    };
     dom.modalSave.onclick = async () => {
         const p = state.editingProject;
+        const typedName = dom.modalName.value.trim();
+        const typedRoot = normalizePath(dom.modalRoot.value).trim();
+
+        if (state.isCreatingProject) {
+            if (!typedRoot) {
+                setEditModalFeedback('Choisis un dossier racine avant de continuer.');
+                return;
+            }
+            const projectPath = typedRoot;
+            const existing = state.metadata[projectPath] || {};
+            if (existing && !existing._removed) {
+                const existingName = existing.displayName || projectPath.split('/').pop() || 'Projet';
+                setEditModalFeedback(`Projet déjà existant sous le nom de "${existingName}".`);
+                return;
+            }
+
+            state.metadata[projectPath] = {
+                ...existing,
+                displayName: typedName || existing.displayName || projectPath.split('/').pop() || 'Projet',
+                customRoot: projectPath,
+                isFavorite: !!existing.isFavorite,
+                customCommands: Array.isArray(existing.customCommands) ? existing.customCommands : [],
+                logoPath: state.modalDraftLogoPath || existing.logoPath || null,
+                _removed: false
+            };
+
+            await saveMetadata();
+            if (!state.projectOrder.includes(projectPath)) {
+                state.projectOrder = [...state.projectOrder, projectPath];
+                await saveProjectOrder();
+            }
+            dom.editModal.classList.add('hidden');
+            dom.editModal.classList.remove('creating');
+            state.isCreatingProject = false;
+            state.modalDraftLogoPath = null;
+            setEditModalFeedback('');
+            focusActiveTerminal();
+            await loadProjects();
+            return;
+        }
+
         if (!state.metadata[p.path]) state.metadata[p.path] = {};
-        state.metadata[p.path].displayName = dom.modalName.value;
-        state.metadata[p.path].customRoot = dom.modalRoot.value;
+        const displayName = typedName || p.displayName || p.name;
+        const nextRoot = typedRoot || normalizePath(p.path);
+        state.metadata[p.path].displayName = displayName;
+        state.metadata[p.path].customRoot = nextRoot;
+        state.metadata[p.path].logoPath = state.modalDraftLogoPath || null;
         await saveMetadata();
+        if (state.activeProjectId === p.path) {
+            state.activeProjectRoot = nextRoot;
+        }
         dom.editModal.classList.add('hidden');
+        state.modalDraftLogoPath = null;
+        setEditModalFeedback('');
         focusActiveTerminal();
         await loadProjects();
     };
@@ -1033,7 +1587,17 @@ async function init() {
     dom.cmdCancel.onclick = () => { dom.cmdModal.classList.add('hidden'); focusActiveTerminal(); };
     dom.cmdSave.onclick = saveCustomCommand;
 
-    dom.deleteCancelBtn.onclick = () => { dom.deleteModal.classList.add('hidden'); focusActiveTerminal(); };
+    dom.deleteCancelBtn.onclick = () => {
+        dom.deleteModal.classList.add('hidden');
+        if (state.deleteCancelCallback) {
+            state.deleteCancelCallback();
+            state.deleteCancelCallback = null;
+            state.deleteCallback = null;
+            return;
+        }
+        focusActiveTerminal();
+        state.deleteCallback = null;
+    };
     dom.deleteConfirmBtn.onclick = deleteCommand;
 
     dom.portsListBody.addEventListener('click', async (e) => {

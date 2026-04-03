@@ -33,7 +33,9 @@ const CONFIG_PATH = path.join(__dirname, '../../config.json');
 
 const DEFAULT_CONFIG = {
   rootPath: os.homedir(),
-  projectMetadata: {}
+  projectMetadata: {},
+  projectOrder: [],
+  emojiRecentOrder: []
 };
 
 async function readConfig() {
@@ -421,10 +423,14 @@ ipcMain.on('window:move', (event, { x, y }) => {
 });
 
 // IPC Handler: Pick a project folder via native dialog
-ipcMain.handle('project:pick-folder', async () => {
+ipcMain.handle('project:pick-folder', async (event, options = {}) => {
+  const defaultPath = options?.defaultPath
+    ? String(options.defaultPath).replace(/\//g, '\\')
+    : undefined;
   const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory'],
-    title: 'Sélectionner le dossier du projet'
+    title: 'Sélectionner le dossier du projet',
+    defaultPath
   });
   if (canceled || !filePaths.length) return null;
   const folderPath = filePaths[0].replace(/\\/g, '/');
@@ -446,6 +452,34 @@ ipcMain.handle('project:get-metadata', async () => {
 ipcMain.handle('project:save-metadata', async (event, metadata) => {
   const config = await readConfig();
   config.projectMetadata = metadata;
+  await writeConfig(config);
+});
+
+ipcMain.handle('project:get-order', async () => {
+  const config = await readConfig();
+  return Array.isArray(config.projectOrder) ? config.projectOrder : [];
+});
+
+ipcMain.handle('project:save-order', async (event, projectOrder) => {
+  const config = await readConfig();
+  config.projectOrder = Array.isArray(projectOrder)
+    ? projectOrder.map((item) => String(item || '').replace(/\\/g, '/')).filter(Boolean)
+    : [];
+  await writeConfig(config);
+});
+
+ipcMain.handle('emoji:get-order', async () => {
+  const config = await readConfig();
+  return Array.isArray(config.emojiRecentOrder)
+    ? config.emojiRecentOrder.map((item) => String(item || '')).filter(Boolean)
+    : [];
+});
+
+ipcMain.handle('emoji:save-order', async (event, emojiRecentOrder) => {
+  const config = await readConfig();
+  config.emojiRecentOrder = Array.isArray(emojiRecentOrder)
+    ? [...new Set(emojiRecentOrder.map((item) => String(item || '')).filter(Boolean))]
+    : [];
   await writeConfig(config);
 });
 

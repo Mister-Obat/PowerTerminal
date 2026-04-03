@@ -3,13 +3,19 @@
 ## 1. Gestion des Projets
 
 ### Ajout / Suppression
-- Ajout manuel via dialogue natif (`project:pick-folder`).
+- Ajout via modale d'édition vierge: l'utilisateur ouvre `+`, choisit le dossier via `Browse`, renseigne le nom puis enregistre.
+- Tant que la modale d'ajout est annulée, aucun projet n'est créé.
+- Si le dossier choisi existe déjà, la modale affiche un message explicite avec le nom déjà enregistré du projet (pas d'échec silencieux).
 - Suppression logique via flag `_removed` dans `projectMetadata`.
 - Favoris et logos personnalisés gérés dans les métadonnées.
+- Un clic sur un projet dans `Espace projets` ouvre directement la modale d'édition (plus d'ouverture terminal depuis cette vue).
+- Le chemin racine terminal (`customRoot`) est modifiable dans la modale via saisie et bouton `Browse` sans perte des commandes du projet.
+- La suppression d'un projet se déclenche depuis la modale d'édition via un bouton corbeille dédié (coin haut droit), avec confirmation avant application.
 
 ### Source de vérité
 - Les projets affichés proviennent de `projectMetadata` uniquement.
 - Pas de scan automatique de dossiers dans la version actuelle.
+- Dans `Espace projets`, l'affichage reste trié alphabétiquement (favoris et non-favoris).
 
 ## 2. Commandes Personnalisées
 
@@ -27,6 +33,7 @@
 - Réorganisation drag & drop.
 - Lancement dans le terminal actif du projet.
 - Si terminal absent ou invalide: auto-création/ré-attachement avant exécution.
+- Le sélecteur d'émojis priorise les émojis récemment utilisés (ordre persistant), puis affiche les autres.
 
 ### Limites actuelles
 - Pas de templating (`{{root}}`, `{{input:...}}`, etc.) implémenté.
@@ -48,6 +55,8 @@
 ### Règle UX
 - Le point vert indique uniquement `running=true`.
 - Un terminal ouvert mais idle ne doit pas afficher l'indicateur actif.
+- En mode vertical (barre apps horizontale), la molette souris sur la zone apps scroll horizontalement de manière fluide.
+- À l'ouverture de `Terminaux`: si un seul favori existe, il est auto-sélectionné; si aucun favori n'existe, l'écran affiche un état vide guidant vers `Espace projets` + activation via étoile.
 
 ## 4. Persistance
 
@@ -56,6 +65,13 @@
 - Clés principales:
   - `rootPath`
   - `projectMetadata`
+  - `projectOrder` (ordre personnalisé des apps/projets dans la barre `Terminaux`)
+  - `emojiRecentOrder` (ordre des émojis récemment utilisés dans la modale commande)
+
+### Règles d'ordre
+- Le drag & drop de la barre apps (`Terminaux`) fonctionne en orientation verticale et horizontale avec indicateur d'insertion adapté.
+- Le passage en favori positionne le projet en fin d'ordre dans la barre `Terminaux`.
+- L'ordre manuel n'est pas utilisé dans `Espace projets` (tri alphabétique uniquement).
 
 ### Non implémenté actuellement
 - Pas de session persistée des terminaux (tabs/logs/cwd runtime).

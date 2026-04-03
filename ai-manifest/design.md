@@ -19,6 +19,10 @@ Le design doit évoquer la puissance et la clarté.
 ### Project Card
 - Effet de survol : `scale(1.02)` + augmentation de l'opacité du glassmorphism.
 - Badge indicateur si des processus sont en cours dans ce projet.
+- Grille `Espace projets` responsive: `1` colonne (étroit), `2` colonnes (normal), puis `3`/`4` colonnes quand l'espace horizontal est suffisant.
+- Action de suppression: corbeille déplacée dans la modale d'édition projet, bouton visible en haut à droite.
+- Modale d'ajout projet (vierge): titre `Ajouter un projet` centré.
+- Survol du bloc logo dans la modale: overlay avec icône Lucide d'ajout d'image.
 
 ### Command Cards
 - **Structure** : Émoji, Nom, Preview de la commande et barre d'actions.
@@ -36,6 +40,7 @@ Le design doit évoquer la puissance et la clarté.
 - **Compaction** : Réduction adaptive de la largeur des onglets avec troncature du texte (`ellipsis`).
 - **Sidebar Apps** : bouton `+` (ajouter commande) positionné en bas, séparé visuellement de la liste des apps et toujours visible.
 - **Scroll Apps** : si la liste d'apps est longue, seule la liste défile au-dessus du bloc du bouton `+`.
+- **Drag Apps** : indicateur d'insertion directionnel (horizontal/vertical selon l'orientation de la barre) avec décalage visuel des apps cibles.
 
 ### Port Monitor Page
 - **Entrée** : bouton "Ports actifs" dans la barre de navigation globale en haut de l'application.
@@ -52,6 +57,11 @@ Le design doit évoquer la puissance et la clarté.
 - **Position** : barre commune en haut, visible sur toutes les pages.
 - **Contenu** : `Terminaux`, `Espace projets`, `Ports actifs`.
 - **Action secondaire** : bouton `Faire un don` aligné tout à droite de cette barre.
+- **Mode compact** : en largeur réduite, les boutons de navigation et `Faire un don` passent en version icône.
+
+### Titlebar Fenêtre
+- Logo app (`logo.ico`) affiché à gauche du nom dans la barre système custom.
+- Contrôles fenêtre (`min`, `max`, `close`) rendus avec icônes Lucide pour une meilleure lisibilité.
 
 ## 3. Animations & Transitions
 - **Page Change** : Slide-fade entre le sélecteur et le dashboard.

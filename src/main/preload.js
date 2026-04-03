@@ -15,11 +15,15 @@ contextBridge.exposeInMainWorld('api', {
   getConfig: () => ipcRenderer.invoke('config:get'),
 
   // Projects
-  pickFolder: () => ipcRenderer.invoke('project:pick-folder'),
+  pickFolder: (defaultPath) => ipcRenderer.invoke('project:pick-folder', { defaultPath }),
 
   // Metadata APIs
   getMetadata: () => ipcRenderer.invoke('project:get-metadata'),
   saveMetadata: (metadata) => ipcRenderer.invoke('project:save-metadata', metadata),
+  getProjectOrder: () => ipcRenderer.invoke('project:get-order'),
+  saveProjectOrder: (projectOrder) => ipcRenderer.invoke('project:save-order', projectOrder),
+  getEmojiOrder: () => ipcRenderer.invoke('emoji:get-order'),
+  saveEmojiOrder: (emojiRecentOrder) => ipcRenderer.invoke('emoji:save-order', emojiRecentOrder),
   pickLogo: (cwd) => ipcRenderer.invoke('project:pick-logo', cwd),
 
   // Window Controls
