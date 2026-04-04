@@ -1264,11 +1264,6 @@ html, body {
     transition: background-color 0.2s, border-color 0.2s, transform 0.2s;
 }
 
-.modal-delete-project .icon-mask {
-    width: 18px;
-    height: 18px;
-}
-
 .modal-delete-project:hover {
     background: rgba(239, 68, 68, 0.24);
     border-color: rgba(239, 68, 68, 0.65);
@@ -1300,10 +1295,6 @@ html, body {
     color: rgba(255, 255, 255, 0.35);
 }
 
-#modal-logo-placeholder .icon-mask {
-    width: 28px;
-    height: 28px;
-}
 .modal-logo-overlay {
     position: absolute;
     inset: 0;
@@ -1320,9 +1311,17 @@ html, body {
     height: 13px;
 }
 
-.modal-logo-overlay .icon-mask {
+.modal-lucide-icon {
+    flex: 0 0 auto;
+    display: block;
+}
+
+.modal-lucide-image-plus {
     width: 28px;
     height: 28px;
+}
+
+.modal-logo-overlay .modal-lucide-icon {
     color: #fff;
 }
 .modal-actions { display: flex; justify-content: center; gap: 1rem; margin-top: 1rem; }
