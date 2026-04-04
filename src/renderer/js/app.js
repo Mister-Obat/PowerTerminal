@@ -1521,21 +1521,29 @@ async function init() {
                 setEditModalFeedback('Choisis un dossier racine avant de continuer.');
                 return;
             }
+
+            // Re-sync with disk to avoid stale in-memory duplicates
+            // (e.g. config.json deleted while app is still running).
+            const latestMetadata = await window.api.getMetadata();
+            const { normalized } = normalizeMetadataMap(latestMetadata);
+            state.metadata = normalized;
+
             const projectPath = typedRoot;
-            const existing = state.metadata[projectPath] || {};
+            const existing = state.metadata[projectPath];
             if (existing && !existing._removed) {
                 const existingName = existing.displayName || projectPath.split('/').pop() || 'Projet';
                 setEditModalFeedback(`Projet déjà existant sous le nom de "${existingName}".`);
                 return;
             }
+            const existingMeta = existing || {};
 
             state.metadata[projectPath] = {
-                ...existing,
-                displayName: typedName || existing.displayName || projectPath.split('/').pop() || 'Projet',
+                ...existingMeta,
+                displayName: typedName || existingMeta.displayName || projectPath.split('/').pop() || 'Projet',
                 customRoot: projectPath,
-                isFavorite: !!existing.isFavorite,
-                customCommands: Array.isArray(existing.customCommands) ? existing.customCommands : [],
-                logoPath: state.modalDraftLogoPath || existing.logoPath || null,
+                isFavorite: !!existingMeta.isFavorite,
+                customCommands: Array.isArray(existingMeta.customCommands) ? existingMeta.customCommands : [],
+                logoPath: state.modalDraftLogoPath || existingMeta.logoPath || null,
                 _removed: false
             };
 

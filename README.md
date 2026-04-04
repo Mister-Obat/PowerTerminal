@@ -1,16 +1,23 @@
 # PowerTerminal
 
-PowerTerminal est une app desktop Windows pour lancer rapidement des commandes par projet, avec un terminal intégré.
+Outil visuel pour gérer plusieurs projets, lancer des commandes instantanément et arrêter les ports bloquants.  
+Visual tool to manage multiple projects, run commands instantly and kill blocking ports.
 
 ![Electron](https://img.shields.io/badge/Electron-31-47848F?logo=electron) ![xterm.js](https://img.shields.io/badge/xterm.js-5-green) ![Windows](https://img.shields.io/badge/Windows-11-0078D4?logo=windows)
 
-## Aperçu
+## Démo rapide
+
+Ajout d'un projet + lancement de commandes:
+
+![Demo](assets/screenshots/gif1.gif)
+
+## Captures
 
 | Dashboard | Ports actifs |
 |-----------|--------------|
 | ![Dashboard](assets/screenshots/1.png) | ![Ports actifs](assets/screenshots/2.png) |
 
-## Utilité et utilisation
+## Ce que fait l'app
 
 PowerTerminal sert à piloter rapidement tes projets en local: lancer des commandes, gérer plusieurs terminaux et nettoyer les processus qui bloquent des ports.
 
@@ -31,6 +38,13 @@ PowerTerminal sert à piloter rapidement tes projets en local: lancer des comman
 - La page `Ports actifs` permet de voir facilement ce qui tourne sur le PC.
 - Tu peux tuer un processus en un clic (`Kill`) pour libérer un port rapidement.
 - Les colonnes disponibles: `PORT`, `PROCESSUS`, `PID`, `PROGRAMME`, `FRAMEWORK`, `ACTION`.
+
+## Fonctionnalités clés
+
+- Gestion de projets favoris + ordre personnalisé dans `Terminaux`.
+- Multi-shell par projet avec indicateur d'activité réel.
+- Commandes custom par projet (emoji, label, commande).
+- Monitoring des ports actifs + action `Kill`.
 
 ## Stack
 
