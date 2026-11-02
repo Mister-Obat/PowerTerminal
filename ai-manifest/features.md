@@ -31,6 +31,7 @@
 ### Capacités
 - Création, édition, suppression.
 - Réorganisation drag & drop.
+- Copie d'une commande par clic droit sur sa carte, puis collage direct par clic droit dans la zone vide des commandes d'un autre projet.
 - Lancement dans le terminal actif du projet.
 - Si terminal absent ou invalide: auto-création/ré-attachement avant exécution.
 - Le sélecteur d'émojis priorise les émojis récemment utilisés (ordre persistant), puis affiche les autres.

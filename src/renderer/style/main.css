@@ -1095,6 +1095,29 @@ html, body {
     border-color: var(--accent);
 }
 
+.command-transfer-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 1.5rem;
+    z-index: 12000;
+    max-width: min(560px, calc(100vw - 2rem));
+    padding: 0.75rem 1rem;
+    border: 1px solid rgba(99, 102, 241, 0.55);
+    border-radius: 0.7rem;
+    background: rgba(15, 15, 22, 0.96);
+    color: var(--text);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, 12px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.command-transfer-toast.visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
 .btn-danger {
     background: var(--danger) !important;
     border: none !important;

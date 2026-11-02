@@ -24,6 +24,7 @@ const state = {
     projectDragMoved: false,
     sidebarDropIndex: null,
     recentlyOpened: [], // Array of project paths opened in current session (non-favorites only)
+    copiedCommand: null,
     ports: [],
     portsFeedback: null,
     portsLoading: false
@@ -91,6 +92,7 @@ const dom = {
 let portsTableResizeObserver = null;
 let sidebarWheelRaf = null;
 let sidebarWheelTarget = 0;
+let commandTransferToastTimer = null;
 
 function focusActiveTerminal() {
     const active = state.terminals.find(t => t.id === state.activeTerminalId);
@@ -924,6 +926,50 @@ function removeActiveTerminal() {
 /**
  * Commands (Rich UI)
  */
+function showCommandTransferFeedback(message) {
+    let toast = document.getElementById('command-transfer-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'command-transfer-toast';
+        toast.className = 'command-transfer-toast';
+        toast.setAttribute('role', 'status');
+        toast.setAttribute('aria-live', 'polite');
+        document.body.appendChild(toast);
+    }
+
+    toast.textContent = message;
+    toast.classList.add('visible');
+    clearTimeout(commandTransferToastTimer);
+    commandTransferToastTimer = setTimeout(() => toast.classList.remove('visible'), 2600);
+}
+
+function copyCommand(cmd) {
+    state.copiedCommand = {
+        emoji: cmd.emoji || '⚡',
+        label: cmd.label || 'Sans nom',
+        command: cmd.command || 'echo hello'
+    };
+    showCommandTransferFeedback(`Commande « ${state.copiedCommand.label} » copiée. Clic droit dans le vide pour la coller.`);
+}
+
+async function pasteCopiedCommand() {
+    if (!state.copiedCommand) {
+        showCommandTransferFeedback('Aucune commande copiée. Faites un clic droit sur une commande.');
+        return;
+    }
+    if (!state.activeProjectId) return;
+
+    const meta = state.metadata[state.activeProjectId] || {};
+    if (!Array.isArray(meta.customCommands)) meta.customCommands = [];
+    meta.customCommands.push({ ...state.copiedCommand });
+    state.metadata[state.activeProjectId] = meta;
+    await saveMetadata();
+    await renderCommands(state.activeProjectRoot);
+
+    const projectName = meta.displayName || 'ce projet';
+    showCommandTransferFeedback(`Commande « ${state.copiedCommand.label} » collée dans ${projectName}.`);
+}
+
 async function renderCommands(projectPath) {
     dom.commandGrid.innerHTML = '';
     
@@ -940,6 +986,7 @@ async function renderCommands(projectPath) {
         card.className = 'cmd-card-fancy';
         card.draggable = true;
         card.dataset.index = idx;
+        card.title = 'Clic droit pour copier cette commande';
         
         const labelSafe = cmd.label.toLowerCase();
         const emoji = cmd.emoji || (Object.keys(emotes).find(k => labelSafe.includes(k)) ? emotes[Object.keys(emotes).find(k => labelSafe.includes(k))] : '⚡');
@@ -972,6 +1019,12 @@ async function renderCommands(projectPath) {
         card.querySelector('.launch').onclick = (e) => {
             e.stopPropagation();
             launchCommand(cmd.command);
+        };
+
+        card.oncontextmenu = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            copyCommand(cmd);
         };
 
         // Drag & Drop (Organic)
@@ -1484,6 +1537,11 @@ async function init() {
     dom.addTerminalBtn.onclick = () => addTerminal(state.activeProjectRoot);
     dom.removeTerminalBtn.onclick = removeActiveTerminal;
     dom.addCustomCmdBtn.onclick = openAddCommandModal;
+    dom.commandGrid.addEventListener('contextmenu', async (event) => {
+        if (event.target.closest('.cmd-card-fancy')) return;
+        event.preventDefault();
+        await pasteCopiedCommand();
+    });
 
     // Modals
     dom.modalLogoPicker.onclick = pickLogoForModal;

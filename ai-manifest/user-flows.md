@@ -47,3 +47,10 @@
 3. L'app ouvre une page dédiée listant les ports actifs.
 4. L'utilisateur clique `Kill` sur une ligne pour arrêter le processus lié.
 5. La liste est rafraîchie automatiquement et l'état affiché reste aligné au runtime.
+
+## Flow 7 : Copier une commande vers un autre projet
+1. L'utilisateur fait un clic droit sur la carte d'une commande.
+2. Un message confirme que la commande est copiée dans la session courante.
+3. Il ouvre un autre projet depuis la barre des apps.
+4. Il fait un clic droit dans une partie vide de la grille de commandes.
+5. La commande est ajoutée au projet cible, sauvegardée dans `config.json` et affichée immédiatement.

@@ -27,6 +27,7 @@ Le design doit évoquer la puissance et la clarté.
 ### Command Cards
 - **Structure** : Émoji, Nom, Preview de la commande et barre d'actions.
 - **Actions** : Boutons "Coup de poing" (🗑️, ✏️, 🚀) centrés et toujours visibles sous la preview.
+- **Copier/coller** : clic droit sur une carte pour la copier, puis clic droit dans la zone vide d'une grille de commandes pour la coller; un toast confirme chaque action.
 - **Drag & Drop** : Feedback visuel (opacité, scale) lors du déplacement organique.
 - **Responsive Grid** : grille adaptative basée sur la largeur réelle de la zone commandes (pas la fenêtre globale), en `1` colonne (étroit), puis `2`, `3`, et `4` colonnes quand l'espace horizontal augmente.
 - **Taille cible** : largeur visuelle optimale autour de `230px` par case (autorisé au-dessus, jamais en dessous).
